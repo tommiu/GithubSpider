@@ -7,6 +7,7 @@ Created on Jul 4, 2015
 import requests as r
 import sys
 import json
+import re
 
 class Crawler(object):
     '''
@@ -38,7 +39,35 @@ class Crawler(object):
         Constructor
         '''
     
+    def crawlSearchDays(self, start, end, q="langauge:PHP", sort=None, order=None):
+        """
+        Crawl the clone urls for the search query 'q'.
+        However, the query will be modified to only show results of
+        a certain day.
+        This will be repeated until each day in [start, end] was queried.
+        Therefore, 'start' and 'end' have to be dates of format YYYY-MM-DD.
+        
+        Some days may be skipped due to different length of months.
+        """
+        # Check start and end format first.
+        r = re.compile('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        if not r.match(start) or not r.match(end):
+            # 'start' or 'end' have a wrong format.
+            print (
+                "'start' and 'end' are expected to be of format YYYY-MM-DD."
+                "'%s' and '%s' were given." % (start, end)
+                )
+            return -1
+        
+        else:
+            # Parameters are ok, continue
+            pass
+    
     def crawlSearching(self, q="language:PHP", sort=None, order=None):
+        """
+        Crawl the clone urls for the search query 'q'.
+        The response is split into 10 URLs with 100 repositories each.
+        """
         per_page = 100
         page     = 0
         
