@@ -43,6 +43,7 @@ class Crawler(object):
     KEY_START = "start"
     KEY_NEXT_LINK = "next_link"
     KEY_RL_REMAIN = "X-RateLimit-Remaining"
+    KEY_CLONE_URL = "clone_url"
     KEY_STATUS_CODE   = "status_code"
     KEY_CRAWLED_LINKS = "crawled_links"
     
@@ -106,6 +107,7 @@ class Crawler(object):
         result = None
         url    = None
         next_link = None
+        copy_only = False
         
         l_backup = lambda s : s + "_backup"
 #         l_original = lambda s : s[:-7]
@@ -119,6 +121,8 @@ class Crawler(object):
         # If a links file already exists from earlier crawls, then parse it.
         TEXT_PROCESSING = "Processing contents of file: "
         if os.path.isfile(file_links):
+            print "File '%s' exists already. Will be appending to it." % (file_links)
+
             file_links_backup = l_backup(file_links)
             os.rename(file_links, file_links_backup)
             
@@ -126,27 +130,24 @@ class Crawler(object):
                 # Open fh for writing.
                 fw = open(file_links, 'a')
                 
-                print (TEXT_PROCESSING + str(file_links) + "..."),
+                print TEXT_PROCESSING + str(file_links) + "..."
                 sys.stdout.flush()
                 
                 # 'counter' determines the correct sequence/file-format of
                 # the given links-file.
                 counter = 0
-                
+
                 for l in f_links.readlines():
                     counter += 1
                     if self.isComment(l):
                         if self.isSince(l) and counter == 1:
                             since = self.getVal(l)
-                            print "found since"
 
                         elif self.isNext(l) and counter == 2:
                             next_link = self.getVal(l, sep=' ', index=2)
-                            print "found nextlink"
                             
                         elif self.isEtag(l) and counter == 3:
                             etag = self.getVal(l)
-                            print "found etag"
                         
                         else:
                             print l
@@ -156,7 +157,6 @@ class Crawler(object):
                             sys.exit()
                     else:
                         if l != "" and counter == 4:
-                            print "found dict"
                             repo = l.strip()
                             
                             # We are done with parsing a single block of data,
@@ -165,36 +165,39 @@ class Crawler(object):
                             # -> The link file can get huge and this way, we 
                             # do not spam the memory with large lists of data.
                             counter = 0
-                            
+
                             if result and url:
-                                print "backup: parsing next"
                                 # Parse next
                                 result = self.nextBackupCrawl(
                                                 fw, repo, since, next_link,
-                                                etag=etag, url=url
+                                                etag=etag, url=url, 
+                                                copy_only=copy_only
                                                 )
                                 
                             else:
-                                print "backup: parsing first"
                                 # Parse first
                                 result = self.nextBackupCrawl(
-                                                fw, repo, since, 
-                                                next_link, etag=etag
+                                                fw, repo, since, next_link,
+                                                etag=etag, copy_only=copy_only
                                                 )
                                     
                             url = self.getNextURL(result, next_link)
                                 
                             if result[self.KEY_RL_REMAIN] == "0":
-                                print "Ratelimit reached. Quitting..."
-                                sys.exit()
-        
-                print "Done."
-        
+                                copy_only = True
+
+                print "Done parsing old data."
+                
+        if result[self.KEY_RL_REMAIN] == "0":
+            self.endExecution()
+
         # Parsing finished or no backup file found. Start crawling new data.
-        if not fw:
-            # There was no backup file, so start from beginning.
-            fw = open(file_links, 'a')
-        
+        if not fw or (fw and not url):
+            # There was no backup file or we didn't find appropriate data
+            # in backup file. Start crawling from the beginning.
+            if not fw:
+                fw = open(file_links, 'a')
+
             # Parse first
             result = self.nextCrawl(fw)
             url    = self.getNextURL(result)
@@ -204,27 +207,27 @@ class Crawler(object):
             # Crawl next page
             result = self.nextCrawl(fw, url=url)
             url    = self.getNextURL(result)
-            
-        fw.close()
-        
-        if result[self.KEY_RL_REMAIN] == "0":
-            print "Ratelimit reached. Quitting..."
 
-#     def crawlReposStartingFromURL(file_links, old_file):
-#         pass
-        
-    def nextBackupCrawl(self, fh, repo, since, next_link, etag=None, url=None):
+        fw.close()
+
+        if result[self.KEY_RL_REMAIN] == "0":
+            self.endExecution()
+
+    def nextBackupCrawl(self, fh, repo, since, 
+                        next_link, etag=None, 
+                        url=None, copy_only=False):
         result = None
-        
-        if etag:
-            if url:
-                result = self.crawlRepoLinks(url=url, etag=etag)
+
+        if not copy_only:
+            if etag:
+                if url:
+                    result = self.crawlRepoLinks(url=url, etag=etag)
+                else:
+                    result = self.crawlRepoLinks(etag=etag)
+            elif url:
+                result = self.crawlRepoLinks(url=url)
             else:
-                result = self.crawlRepoLinks(etag=etag)
-        elif url:
-            result = self.crawlRepoLinks(url=url)
-        else:
-            result = self.crawlRepoLinks()
+                result = self.crawlRepoLinks()
 
         if result[self.KEY_STATUS_CODE] == 200:
             # New results from GitHub
@@ -232,7 +235,7 @@ class Crawler(object):
             fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % result[self.KEY_NEXT_LINK])
             fh.write("# " + self.KEY_ETAG  + ": %s\n" % result[self.KEY_ETAG])
 
-            fh.write(str(result[self.KEY_CRAWLED_LINKS]) + "\n")
+            fh.write(json.dumps(result[self.KEY_CRAWLED_LINKS]) + "\n")
             fh.flush()
         
         elif result[self.KEY_STATUS_CODE] == 304:
@@ -244,7 +247,7 @@ class Crawler(object):
             
             fh.write(str(repo) + "\n")
             fh.flush()
-            
+
         return result
     
     def nextCrawl(self, fh, url=None):
@@ -261,7 +264,7 @@ class Crawler(object):
             fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % result[self.KEY_NEXT_LINK])
             fh.write("# " + self.KEY_ETAG  + ": %s\n" % result[self.KEY_ETAG])
 
-            fh.write(str(result[self.KEY_CRAWLED_LINKS]) + "\n")
+            fh.write(json.dumps(result[self.KEY_CRAWLED_LINKS]) + "\n")
             fh.flush()
             
         return result
@@ -281,6 +284,7 @@ class Crawler(object):
         result = {}
         crawled_links = []
         
+        
         headers = self.HEADERS.copy()
         if etag:
             headers["If-None-Match"] = etag
@@ -288,13 +292,14 @@ class Crawler(object):
         resp = None
         
         if not url:
+            print "Crawling, starting from repository %d." % (since)
             result[self.KEY_SINCE] = since
             resp = r.get(self.addOAuth(self.LINK_REPO_API + "?since=" + str(since)),
                          headers=headers)
         else:
-            print "Crawling next:", url
+            print "Crawling next: %s." % (url)
             
-            # Extract 'since'.
+            # Extract the value for 'since' from 'url'.
             since = None
             _, _help = url.split("?")
             args = _help.split("&")
@@ -334,8 +339,7 @@ class Crawler(object):
                     result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
                 
                 if result[self.KEY_RL_REMAIN] == "0":
-                    print "Ratelimit reached. Quitting..."
-                    sys.exit()
+                    break
                 
                 for filter_key, filter_value in query:
                     if filter_key in decoded:
@@ -369,11 +373,16 @@ class Crawler(object):
                     if not self.isComment(l):
                         if l != "" and l != "[]\n":
                             # l is of form [u'https://...', u'https://...']\n
-                            links = l[1:-2].split(',')
-                            
-                            for _link in links:
-                                fw.write(_link.strip()[2:-1] + "\n")
+#                             links = l[1:-2].split(',')
+                            _dict = json.loads(l)
+                            for _dict in _dict:
+                                fw.write(_dict[self.KEY_CLONE_URL].strip() + "\n")
     
+    def endExecution(self):
+        print "Ratelimit reached. Quitting..."
+        sys.exit()
+        
+        
     def getNextURL(self, _dict, next_link=None):
         """
         Find the URL in _dict and return it.
