@@ -56,9 +56,9 @@ def main(argv):
 #             crawler.crawlSearchDays(flow[1], flow[2])
     elif flow[0] == ARGS_CRAWL_REPOS:
             if len(flow) == 3:
-                crawler.crawlRepos(flow[1], flow[2])
+                crawler.crawlReposStartingFromURL(flow[1], flow[2])
             else:
-                crawler.crawlRepos(flow[1])
+                crawler.crawlReposFromBeginning(flow[1])
     elif flow[0] == ARGS_GET_LINKS:
         crawler.transformCrawlDataToLinks(flow[1], flow[2])
             
@@ -119,6 +119,8 @@ def controlFlow(argv):
     elif argv[1] == ARGS_CRAWL_REPOS:
         if len(argv[2:]) == 1:
             return [ARGS_CRAWL_REPOS, argv[2]]
+        elif len(argv[2:]) == 2:
+            return [ARGS_CRAWL_REPOS, argv[2], argv[3]]
         
     elif argv[1] == ARGS_GET_LINKS:
         if len(argv[2:]) == 2:
