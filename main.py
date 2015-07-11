@@ -28,8 +28,8 @@ USAGE_ARGS = [
 
 ARGS_RATELIMIT   = "ratelimit"
 ARGS_GET_LINKS   = "get_links"
-ARGS_CRAWL_1000  = "crawl1000"
-ARGS_CRAWL_DAYS  = "crawlDays"
+# ARGS_CRAWL_1000  = "crawl1000"
+# ARGS_CRAWL_DAYS  = "crawlDays"
 ARGS_CRAWL_REPOS = "repo_links"
 
 def main(argv):
@@ -44,19 +44,21 @@ def main(argv):
     if flow[0] == ARGS_RATELIMIT:
         crawler.showRateLimit()
         
-    elif flow[0] == ARGS_CRAWL_1000:
-        if len(flow) == 2:
-            crawler.crawlSearching(flow[1])
-        else:
-            crawler.crawlSearching()
-    elif flow[0] == ARGS_CRAWL_DAYS:
-        if len(flow) == 4:
-            crawler.crawlSearchDays(flow[1], flow[2], flow[3])
-        else:
-            crawler.crawlSearchDays(flow[1], flow[2])
+#     elif flow[0] == ARGS_CRAWL_1000:
+#         if len(flow) == 2:
+#             crawler.crawlSearching(flow[1])
+#         else:
+#             crawler.crawlSearching()
+#     elif flow[0] == ARGS_CRAWL_DAYS:
+#         if len(flow) == 4:
+#             crawler.crawlSearchDays(flow[1], flow[2], flow[3])
+#         else:
+#             crawler.crawlSearchDays(flow[1], flow[2])
     elif flow[0] == ARGS_CRAWL_REPOS:
-#             crawler.crawlRepos(flow[1], flow[2])
-            crawler.crawlRepos(flow[1])
+            if len(flow) == 3:
+                crawler.crawlRepos(flow[1], flow[2])
+            else:
+                crawler.crawlRepos(flow[1])
     elif flow[0] == ARGS_GET_LINKS:
         crawler.transformCrawlDataToLinks(flow[1], flow[2])
             
@@ -106,14 +108,14 @@ def controlFlow(argv):
     
     if argv[1] == ARGS_RATELIMIT:
         return [ARGS_RATELIMIT,]
-    elif argv[1] == ARGS_CRAWL_1000:
-        return [ARGS_CRAWL_1000, query] if query else [ARGS_CRAWL_1000,]
-    elif argv[1] == ARGS_CRAWL_DAYS:
-        if days:
-            return (
-                [ARGS_CRAWL_DAYS, days[0], days[1], query] if query else 
-                [ARGS_CRAWL_DAYS, days[0], days[1]]
-                 )
+#     elif argv[1] == ARGS_CRAWL_1000:
+#         return [ARGS_CRAWL_1000, query] if query else [ARGS_CRAWL_1000,]
+#     elif argv[1] == ARGS_CRAWL_DAYS:
+#         if days:
+#             return (
+#                 [ARGS_CRAWL_DAYS, days[0], days[1], query] if query else 
+#                 [ARGS_CRAWL_DAYS, days[0], days[1]]
+#                  )
     elif argv[1] == ARGS_CRAWL_REPOS:
         if len(argv[2:]) == 1:
             return [ARGS_CRAWL_REPOS, argv[2]]
