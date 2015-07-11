@@ -27,8 +27,10 @@ USAGE_ARGS = [
         ]
 
 ARGS_RATELIMIT   = "ratelimit"
+ARGS_GET_LINKS   = "get_links"
 ARGS_CRAWL_1000  = "crawl1000"
-ARGS_CRAWL_DAYS  = "crawlDays" 
+ARGS_CRAWL_DAYS  = "crawlDays"
+ARGS_CRAWL_REPOS = "repo_links"
 
 def main(argv):
     """
@@ -52,6 +54,11 @@ def main(argv):
             crawler.crawlSearchDays(flow[1], flow[2], flow[3])
         else:
             crawler.crawlSearchDays(flow[1], flow[2])
+    elif flow[0] == ARGS_CRAWL_REPOS:
+#             crawler.crawlRepos(flow[1], flow[2])
+            crawler.crawlRepos(flow[1])
+    elif flow[0] == ARGS_GET_LINKS:
+        crawler.transformCrawlDataToLinks(flow[1], flow[2])
             
 def controlFlow(argv):
     """
@@ -107,6 +114,14 @@ def controlFlow(argv):
                 [ARGS_CRAWL_DAYS, days[0], days[1], query] if query else 
                 [ARGS_CRAWL_DAYS, days[0], days[1]]
                  )
+    elif argv[1] == ARGS_CRAWL_REPOS:
+        if len(argv[2:]) == 1:
+            return [ARGS_CRAWL_REPOS, argv[2]]
+        
+    elif argv[1] == ARGS_GET_LINKS:
+        if len(argv[2:]) == 2:
+            return [ARGS_GET_LINKS, argv[2], argv[3]]
+        
     
     usage(argv[0])
     sys.exit(0)

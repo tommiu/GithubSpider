@@ -8,6 +8,7 @@ import requests as r
 import sys
 import json
 import re
+import os
 
 class Crawler(object):
     '''
@@ -22,6 +23,7 @@ class Crawler(object):
     
     
     LINK_API   = "https://api.github.com"
+    LINK_REPO_API   = LINK_API + "/repositories"
     LINK_SEARCH_API = LINK_API + "/search/repositories"
     LINK_RATE_LIMIT = LINK_API + "/rate_limit"
     HEADER_USER_AGENT    = "tommiu@web.de"
@@ -33,6 +35,18 @@ class Crawler(object):
             'User-Agent':    HEADER_USER_AGENT,
             'Authorization': HEADER_AUTHORIZATION,
             }
+    
+    KEY_NEXT  = "next"
+    KEY_ETAG  = "ETag"
+    KEY_SINCE = "since"
+    KEY_COUNT = "count"
+    KEY_START = "start"
+    KEY_NEXT_LINK = "next_link"
+    KEY_RL_REMAIN = "X-RateLimit-Remaining"
+    KEY_STATUS_CODE   = "status_code"
+    KEY_CRAWLED_LINKS = "crawled_links"
+    
+    COMMENT_CHAR = "#"
     
     def __init__(self):
         '''
@@ -80,6 +94,271 @@ class Crawler(object):
             if not resp["items"]:
                 break
     
+    def crawlRepos(self, file_links):
+        """
+        Crawl all repos, not considering already crawled ones (=speed-up).
+        """
+        links = []
+        etags = []
+        since = []
+        nexts = []
+        l_backup   = lambda s : s + "_backup"
+#         l_original = lambda s : s[:-7]
+        
+        file_links_backup = ""    
+        
+        # If a links file already exists from earlier crawls, then parse it.
+        TEXT_PROCESSING = "Processing contents of file: "
+        if os.path.isfile(file_links):
+            file_links_backup = l_backup(file_links)
+            os.rename(file_links, file_links_backup)
+            
+            with open(file_links_backup, 'r') as f_links:
+                print (TEXT_PROCESSING + str(file_links) + "..."),
+                sys.stdout.flush()
+                
+                for l in f_links.readlines():
+                    if self.isComment(l):
+                        if self.isEtag(l):
+                            etags.append(self.getVal(l))
+                        elif self.isSince(l):
+                            since.append(self.getVal(l))
+                        elif self.isNext(l):
+                            nexts.append(self.getVal(l, sep=' ', index=2))
+                        else:
+                            print l
+                            print "Encountered an error with file '%s'." % (
+                                                                    file_links
+                                                                    )
+                            sys.exit()
+                    else:
+                        if l != "":
+                            links.append(l.strip())
+        
+                print "Done."
+        
+        if len(etags) != len(since):
+            print "Encountered an error with file '%s'." % (file_links)
+            sys.exit()
+
+        # Parsing finished. Start crawling.         
+        fw = open(file_links, 'a')
+        
+        # Parse first
+        i = 0
+        result = self.nextCrawl(fw, links, etags, since, nexts, i)
+        
+        url = None
+        if self.KEY_NEXT_LINK in result:
+            url = result[self.KEY_NEXT_LINK]
+        else:
+            url = nexts[i]
+        
+        # Parse next
+        while url and result[self.KEY_RL_REMAIN] != "0":
+            # Crawl next page
+            i += 1
+            result = self.nextCrawl(fw, links, etags, since, nexts, i,
+                                    url=url)
+            
+            if self.KEY_NEXT_LINK in result:
+                url = result[self.KEY_NEXT_LINK]
+            elif len(nexts) > i:
+                url = nexts[i]
+            else:
+                url = ""
+            
+        fw.close()
+        
+        if result[self.KEY_RL_REMAIN] == "0":
+            print "Ratelimit reached. Quitting..."
+        
+    def nextCrawl(self, fh, links, etags, since, nexts, counter, url=None):
+        result = None
+        
+        if etags and len(etags) > counter:
+            if url:
+                result = self.crawlRepoLinks(url=url, etag=etags[counter])
+            else:
+                result = self.crawlRepoLinks(etag=etags[counter])
+        elif url:
+            result = self.crawlRepoLinks(url=url)
+        else:
+            result = self.crawlRepoLinks()
+
+        if result[self.KEY_STATUS_CODE] == 200:
+            # New results from GitHub
+            fh.write("# " + self.KEY_SINCE + ": %s\n" % result[self.KEY_SINCE])
+            fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % result[self.KEY_NEXT_LINK])
+            fh.write("# " + self.KEY_ETAG  + ": %s\n" % result[self.KEY_ETAG])
+
+            fh.write(str(result[self.KEY_CRAWLED_LINKS]) + "\n")
+        
+        elif result[self.KEY_STATUS_CODE] == 304:
+            # Results didn't change since last crawling.
+            # Get them from the backup file.
+            fh.write("# " + self.KEY_SINCE + ": %s\n" % since[counter])
+            fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % nexts[counter])
+            fh.write("# " + self.KEY_ETAG  + ": %s\n" % etags[counter])
+            
+            fh.write(str(links[counter]) + "\n")
+            
+        fh.flush()
+        return result
+
+    def crawlRepoLinks(self, since=0, query=[["language", "PHP"]], etag=None,
+                       url=None):
+        """
+        Get public repositories links since 'since', that fit to 'query'.
+        
+        'etag' can be used to save API-query ratelimit, because the server will
+        simply answer with code 304 to indicate no changes since the same last
+        query.
+        
+        'url' can be used instead of 'since' to directly 
+        provide the correct url. 
+        """
+        result = {}
+        crawled_links = []
+        
+        headers = self.HEADERS.copy()
+        if etag:
+            headers["If-None-Match"] = etag
+            
+        resp = None
+        
+        if not url:
+            result[self.KEY_SINCE] = since
+            resp = r.get(self.addOAuth(self.LINK_REPO_API + "?since=" + str(since)),
+                         headers=headers)
+        else:
+            print "Crawling next:", url
+            
+            # Extract 'since'.
+            since = None
+            _, _help = url.split("?")
+            args = _help.split("&")
+            for arg in args:
+                if arg.startswith("since"):
+                    _, since = arg.split("=")
+                    break
+
+            result[self.KEY_SINCE] = since
+            
+            resp = r.get(url, headers=headers)
+            
+        # Extract necessary information from response.
+        if resp.links:
+            # Extract next link.
+            result[self.KEY_NEXT_LINK] = resp.links["next"]["url"]
+            
+        # Extract etag.
+        if self.KEY_ETAG in resp.headers:
+            result[self.KEY_ETAG] = resp.headers[self.KEY_ETAG]
+     
+        # Extract status code.
+        result[self.KEY_STATUS_CODE] = resp.status_code
+        
+        if resp.status_code != 304:
+            # If GitHub answered with new results, parse them.
+            decoded = json.loads(resp.text)
+            for _dict in decoded:
+                # Check if filters apply to link.
+                does_fit = True
+                resp = r.get(self.addOAuth(_dict["url"]),
+                         headers=headers)
+                decoded = json.loads(resp.text)
+                
+                # Extract remaining ratelimit.
+                if self.KEY_RL_REMAIN in resp.headers:
+                    result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
+                
+                if result[self.KEY_RL_REMAIN] == "0":
+                    print "Ratelimit reached. Quitting..."
+                    sys.exit()
+                
+                for filter_key, filter_value in query:
+                    if filter_key in decoded:
+                        if not decoded[filter_key] == filter_value:
+                            does_fit = False
+                            break
+                    else:
+                        does_fit = False
+                        break
+                
+                if does_fit:
+#                     crawled_links.append(decoded["clone_url"])
+                    crawled_links.append(decoded)
+        else:
+            # We already know these repos, skip them.
+            print "Already crawled repo - skipping."
+        
+        result[self.KEY_CRAWLED_LINKS] = crawled_links
+        result[self.KEY_COUNT] = len(crawled_links)
+        
+        return result
+
+    def transformCrawlDataToLinks(self, input_file, output_file):
+        with open(input_file, 'r') as fr:
+            with open(output_file, 'w') as fw:
+                for l in fr.readlines():
+                    if not self.isComment(l):
+                        if l != "" and l != "[]\n":
+                            # l is of form [u'https://...', u'https://...']\n
+                            links = l[1:-2].split(',')
+                            
+                            for _link in links:
+                                fw.write(_link.strip()[2:-1] + "\n")
+    
+    def isComment(self, _str):
+        return _str.startswith(self.COMMENT_CHAR)
+    
+    def isEtag(self, _str):
+        try:
+            key, _ = _str.split(":")
+            if key[2:] == self.KEY_ETAG:
+                return True
+            
+        except ValueError:
+            pass
+        
+        return False
+    
+    def isSince(self, _str):
+        try:
+            key, _ = _str.split(":")
+            if key[2:] == self.KEY_SINCE:
+                return True
+            
+        except ValueError:
+            pass
+        
+        return False
+    
+    def isNext(self, _str):
+        try:
+            _, key, _ = _str.split(" ")
+            if key.startswith(self.KEY_NEXT_LINK):
+                return True
+            
+        except ValueError:
+            pass
+        
+        return False
+    
+    def getVal(self, _str, sep=':', index=1):
+        """
+        Return the val if _str includes one.
+        Otherwise return False.
+        """
+        # "# " + self.KEY_SINCE + ": %d\n" % result[self.KEY_SINCE])
+        # "# " + self.KEY_ETAG  + ": %s\n" % result[self.KEY_ETAG])
+        try:
+            _arr = _str.split(sep)
+            return _arr[index].strip()
+        except ValueError:
+            return False
+    
     def search(self, q="language:PHP", sort=None, order=None):
         """
         Search GitHub for 'q'.
@@ -105,7 +384,7 @@ class Crawler(object):
         print "Rate Limits:"
         print "core:"  , _dict["core"]
         print "search:", _dict["search"]
-    
+
     def addOAuth(self, url):
         """
         Add the OAuth get-parameter to the specified 'url'.
