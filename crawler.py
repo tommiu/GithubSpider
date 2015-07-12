@@ -188,7 +188,7 @@ class Crawler(object):
 
                 print "Done parsing old data."
                 
-        if result[self.KEY_RL_REMAIN] == "0":
+        if result and result[self.KEY_RL_REMAIN] == "0":
             self.endExecution()
 
         # Parsing finished or no backup file found. Start crawling new data.
@@ -210,7 +210,7 @@ class Crawler(object):
 
         fw.close()
 
-        if result[self.KEY_RL_REMAIN] == "0":
+        if result and result[self.KEY_RL_REMAIN] == "0":
             self.endExecution()
 
     def nextBackupCrawl(self, fh, repo, since, 
