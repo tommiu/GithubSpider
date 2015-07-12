@@ -366,22 +366,21 @@ class Crawler(object):
         
         return result
 
-    def transformCrawlDataToLinks(self, input_file, output_file):
+    def getKeyFromCrawlData(self, input_file, output_file,
+                                  key=KEY_CLONE_URL):
         with open(input_file, 'r') as fr:
             with open(output_file, 'w') as fw:
                 for l in fr.readlines():
                     if not self.isComment(l):
                         if l != "" and l != "[]\n":
-                            # l is of form [u'https://...', u'https://...']\n
-#                             links = l[1:-2].split(',')
-                            _dict = json.loads(l)
-                            for _dict in _dict:
-                                fw.write(_dict[self.KEY_CLONE_URL].strip() + "\n")
-    
+                            # Found a list of repo dictionaries. Read it.
+                            _list = json.loads(l)
+                            for repo in _list:
+                                fw.write(str(repo[key]).strip() + "\n")
+
     def endExecution(self):
         print "Ratelimit reached. Quitting..."
         sys.exit()
-        
         
     def getNextURL(self, _dict, next_link=None):
         """

@@ -27,10 +27,10 @@ USAGE_ARGS = [
         ]
 
 ARGS_RATELIMIT   = "ratelimit"
-ARGS_GET_LINKS   = "get_links"
+ARGS_GET_LINKS   = "extractInfo"
 # ARGS_CRAWL_1000  = "crawl1000"
 # ARGS_CRAWL_DAYS  = "crawlDays"
-ARGS_CRAWL_REPOS = "repo_links"
+ARGS_CRAWL_REPOS = "crawlRepos"
 
 def main(argv):
     """
@@ -62,7 +62,10 @@ def main(argv):
             else:
                 crawler.crawlReposFromBeginning(flow[1])
     elif flow[0] == ARGS_GET_LINKS:
-        crawler.transformCrawlDataToLinks(flow[1], flow[2])
+        if len(flow) == 4:
+            crawler.getKeyFromCrawlData(flow[1], flow[2], flow[3])
+        else:
+            crawler.getKeyFromCrawlData(flow[1], flow[2])
             
 def controlFlow(argv):
     """
@@ -75,7 +78,7 @@ def controlFlow(argv):
     
     query = None
     days  = None
-    
+    opts  = None
     try:
         opts, _ = getopt.getopt(argv[2:], "hq:d:", ["help", "query=",
                                                     "days="])
@@ -84,11 +87,12 @@ def controlFlow(argv):
         print str(err)
         usage(argv[0])
         sys.exit(0)
-    
+
     for o, v in opts:
         if o in (USAGE_ARGS[2][0], USAGE_ARGS[2][1]):
             if v:
                 query = v
+                print "yoyo", query
             else:
                 usage(argv[0])
                 sys.exit(0)
@@ -123,11 +127,13 @@ def controlFlow(argv):
             return [ARGS_CRAWL_REPOS, argv[2]]
         elif len(argv[2:]) == 2:
             return [ARGS_CRAWL_REPOS, argv[2], argv[3]]
-        
+    
+    
     elif argv[1] == ARGS_GET_LINKS:
         if len(argv[2:]) == 2:
             return [ARGS_GET_LINKS, argv[2], argv[3]]
-        
+        elif len(argv[2:]) == 3:
+            return [ARGS_GET_LINKS, argv[2], argv[3], argv[4]]
     
     usage(argv[0])
     sys.exit(0)
@@ -136,9 +142,8 @@ def usage(path):
     """
     Prints help.
     """
-    usage = "[%s/%s/%s/%s] <options>" % (
-                                            ARGS_RATELIMIT, ARGS_CRAWL_1000,
-                                            ARGS_CRAWL_DAYS, "-h"
+    usage = "[%s/%s] <options>" % (
+                                            ARGS_RATELIMIT, "-h"
                                             )
     
     # for each option available, construct its usage string
