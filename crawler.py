@@ -119,7 +119,7 @@ class Crawler(object):
         # Filehandle for writing.
         fw = None
         open(file_links, 'a')
-        
+
         # If a links file already exists from earlier crawls, then parse it.
         TEXT_PROCESSING = "Processing contents of file: "
         if os.path.isfile(file_links):
@@ -168,7 +168,7 @@ class Crawler(object):
                             # do not spam the memory with large lists of data.
                             counter = 0
 
-                            if result and url:
+                            if url:
                                 # Parse next
                                 result = self.nextBackupCrawl(
                                                 fw, repo, since, next_link,
@@ -182,12 +182,17 @@ class Crawler(object):
                                                 fw, repo, since, next_link,
                                                 etag=etag, copy_only=copy_only
                                                 )
-                                    
-                            url = self.getNextURL(result, next_link)
-                                
-                            if result[self.KEY_RL_REMAIN] == "0":
-                                copy_only = True
-
+                            
+                            if result:
+                                # Get next URL to parse.
+                                url = self.getNextURL(result, next_link)
+                            
+                                # Check if we have ratelimit remaining.
+                                if result[self.KEY_RL_REMAIN] == 0:    
+                                    # No ratelimit remaining, continue
+                                    # to only copy the old data and finish.
+                                    copy_only = True
+                            
                 print "Done parsing old data."
                 
         if result and result[self.KEY_RL_REMAIN] == "0":
@@ -218,9 +223,15 @@ class Crawler(object):
     def nextBackupCrawl(self, fh, repo, since, 
                         next_link, etag=None, 
                         url=None, copy_only=False):
+        """
+        Get up-to-date data for already crawled repositories.
+        If 'copy_only' is specified, we only copy old data from
+        the backup file to not lose any already crawled data.
+        """
         result = None
 
         if not copy_only:
+            # copy_only is not specified, so parse data from GitHub.
             if etag:
                 if url:
                     result = self.crawlRepoLinks(url=url, etag=etag)
@@ -231,7 +242,10 @@ class Crawler(object):
             else:
                 result = self.crawlRepoLinks()
 
-        if result[self.KEY_STATUS_CODE] == 200:
+        if (
+        result and result[self.KEY_STATUS_CODE] == 200 and 
+        result[self.KEY_RL_REMAIN] > 0 and not copy_only
+        ):
             # New results from GitHub
             fh.write("# " + self.KEY_SINCE + ": %s\n" % result[self.KEY_SINCE])
             fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % result[self.KEY_NEXT_LINK])
@@ -240,9 +254,9 @@ class Crawler(object):
             fh.write(json.dumps(result[self.KEY_CRAWLED_LINKS]) + "\n")
             fh.flush()
         
-        elif result[self.KEY_STATUS_CODE] == 304:
-            # Results didn't change since last crawling.
-            # Get them from the backup file.
+        else: 
+            # Results didn't change since last crawling OR
+            # we do not have ratelimit remaining, so just copy old data.
             fh.write("# " + self.KEY_SINCE + ": %s\n" % since)
             fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % next_link)
             fh.write("# " + self.KEY_ETAG  + ": %s\n" % etag)
@@ -250,9 +264,22 @@ class Crawler(object):
             fh.write(str(repo) + "\n")
             fh.flush()
 
+        if copy_only:
+            # copy_only specifies, that we will only copy data from the backup
+            # file and finish afterwards.
+            # Therefore, we specify the next parsing url for copy purposes.
+            result = {
+                    self.KEY_RL_REMAIN: 0,
+                    self.KEY_NEXT_LINK: next_link
+                    }
+
         return result
     
     def nextCrawl(self, fh, url=None):
+        """
+        Crawl repositories from GitHub.
+        'url' is used to specify the next parse-URL.
+        """
         result = None
         
         if url:
@@ -271,6 +298,8 @@ class Crawler(object):
             
         return result
 
+    counter = 0
+
     def crawlRepoLinks(self, since=0, query=[["language", "PHP"]], etag=None,
                        url=None):
         """
@@ -285,7 +314,6 @@ class Crawler(object):
         """
         result = {}
         crawled_links = []
-        
         
         headers = self.HEADERS.copy()
         if etag:
@@ -326,6 +354,9 @@ class Crawler(object):
         # Extract status code.
         result[self.KEY_STATUS_CODE] = resp.status_code
         
+        self.counter += 1
+        print self.counter
+        
         if resp.status_code != 304:
             # If GitHub answered with new results, parse them.
             decoded = json.loads(resp.text)
@@ -362,7 +393,7 @@ class Crawler(object):
             # Extract remaining ratelimit.
             if self.KEY_RL_REMAIN in resp.headers:
                 result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
-        
+                
         result[self.KEY_CRAWLED_LINKS] = crawled_links
         result[self.KEY_COUNT] = len(crawled_links)
         
@@ -386,14 +417,14 @@ class Crawler(object):
                                 fw.write(str(repo[key]).strip() + "\n")
 
     def extractReposFiltered(self, input_file, output_file,
-                             filter=None):
+                             _filter=None):
         """
         Extract any repository from 'input_file' that matches 'filter',
         into 'output_file'.
         """
         flow = []
-        if filter:
-            flow = self.parseFilter(filter)
+        if _filter:
+            flow = self.parseFilter(_filter)
         else:
             print "No filter specified. Quitting..."
             sys.exit()
@@ -503,6 +534,8 @@ class Crawler(object):
         """
         Find the URL in _dict and return it.
         Empty string if it does not exist.
+        'next_link' can be used to specify an alternative if there is no
+        link in _dict.
         """
         if self.KEY_NEXT_LINK in _dict:
             return _dict[self.KEY_NEXT_LINK]
