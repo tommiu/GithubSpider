@@ -210,7 +210,7 @@ class Crawler(object):
             url    = self.getNextURL(result)
 
         # Parse until ratelimit is reached.
-        while url and result[self.KEY_RL_REMAIN] != "0":
+        while url and result[self.KEY_RL_REMAIN] > "0":
             # Crawl next page
             result = self.nextCrawl(fw, url=url)
             url    = self.getNextURL(result)
@@ -287,7 +287,10 @@ class Crawler(object):
         else:
             result = self.crawlRepoLinks()
 
-        if result[self.KEY_STATUS_CODE] == 200:
+        if (
+        result[self.KEY_STATUS_CODE] == 200 and 
+        result[self.KEY_RL_REMAIN] > 0
+        ):
             # New results from GitHub
             fh.write("# " + self.KEY_SINCE + ": %s\n" % result[self.KEY_SINCE])
             fh.write("# " + self.KEY_NEXT_LINK  + ": %s\n" % result[self.KEY_NEXT_LINK])
@@ -295,10 +298,13 @@ class Crawler(object):
 
             fh.write(json.dumps(result[self.KEY_CRAWLED_LINKS]) + "\n")
             fh.flush()
+        elif result[self.KEY_RL_REMAIN] == 0:
+            result = {
+                    self.KEY_RL_REMAIN: 0,
+                    self.KEY_NEXT_LINK: ""
+                    }
             
         return result
-
-    counter = 0
 
     def crawlRepoLinks(self, since=0, query=[["language", "PHP"]], etag=None,
                        url=None):
@@ -354,15 +360,16 @@ class Crawler(object):
         # Extract status code.
         result[self.KEY_STATUS_CODE] = resp.status_code
         
-        self.counter += 1
-        print self.counter
-        
-        if resp.status_code != 304:
+        # 304 = old data.
+        # 403 = rate limit exceeded.
+        if resp.status_code != 304 and resp.status_code != 403:
             # If GitHub answered with new results, parse them.
             decoded = json.loads(resp.text)
+
             for _dict in decoded:
                 # Check if filters apply to link.
                 does_fit = True
+
                 resp = r.get(self.addOAuth(_dict["url"]),
                          headers=headers)
                 decoded = json.loads(resp.text)
@@ -386,17 +393,17 @@ class Crawler(object):
                 if does_fit:
 #                     crawled_links.append(decoded["clone_url"])
                     crawled_links.append(decoded)
-        else:
+        elif resp.status_code == 304:
             # We already know these repos, skip them.
             print "Already crawled repo - skipping."
             
-            # Extract remaining ratelimit.
-            if self.KEY_RL_REMAIN in resp.headers:
-                result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
+        # Extract remaining ratelimit.
+        if self.KEY_RL_REMAIN in resp.headers:
+            result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
                 
         result[self.KEY_CRAWLED_LINKS] = crawled_links
         result[self.KEY_COUNT] = len(crawled_links)
-        
+
         return result
 
     def getKeyFromCrawlData(self, input_file, output_file,
