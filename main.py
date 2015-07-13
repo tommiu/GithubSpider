@@ -27,10 +27,11 @@ USAGE_ARGS = [
         ]
 
 ARGS_RATELIMIT   = "ratelimit"
-ARGS_GET_LINKS   = "extractInfo"
 # ARGS_CRAWL_1000  = "crawl1000"
 # ARGS_CRAWL_DAYS  = "crawlDays"
 ARGS_CRAWL_REPOS = "crawlRepos"
+ARGS_EXTRACT_KEYDATA = "extractInfo"
+ARGS_EXTRACTREPOS_FILTERED = "filterRepos"
 
 def main(argv):
     """
@@ -61,11 +62,15 @@ def main(argv):
                 print "todo"
             else:
                 crawler.crawlReposFromBeginning(flow[1])
-    elif flow[0] == ARGS_GET_LINKS:
+    elif flow[0] == ARGS_EXTRACT_KEYDATA:
         if len(flow) == 4:
             crawler.getKeyFromCrawlData(flow[1], flow[2], flow[3])
         else:
             crawler.getKeyFromCrawlData(flow[1], flow[2])
+    
+    elif flow[0] == ARGS_EXTRACTREPOS_FILTERED:
+        if len(flow) == 4:
+            crawler.extractReposFiltered(flow[1], flow[2], flow[3])
             
 def controlFlow(argv):
     """
@@ -129,11 +134,15 @@ def controlFlow(argv):
             return [ARGS_CRAWL_REPOS, argv[2], argv[3]]
     
     
-    elif argv[1] == ARGS_GET_LINKS:
+    elif argv[1] == ARGS_EXTRACT_KEYDATA:
         if len(argv[2:]) == 2:
-            return [ARGS_GET_LINKS, argv[2], argv[3]]
+            return [ARGS_EXTRACT_KEYDATA, argv[2], argv[3]]
         elif len(argv[2:]) == 3:
-            return [ARGS_GET_LINKS, argv[2], argv[3], argv[4]]
+            return [ARGS_EXTRACT_KEYDATA, argv[2], argv[3], argv[4]]
+        
+    elif argv[1] == ARGS_EXTRACTREPOS_FILTERED:
+        if len(argv[2:]) == 3:
+            return [ARGS_EXTRACTREPOS_FILTERED, argv[2], argv[3], argv[4]]
     
     usage(argv[0])
     sys.exit(0)

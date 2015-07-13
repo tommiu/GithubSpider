@@ -47,6 +47,8 @@ class Crawler(object):
     KEY_STATUS_CODE   = "status_code"
     KEY_CRAWLED_LINKS = "crawled_links"
     
+    FILTERKEY_STARS = "stars"
+    
     COMMENT_CHAR = "#"
     
     def __init__(self):
@@ -368,6 +370,11 @@ class Crawler(object):
 
     def getKeyFromCrawlData(self, input_file, output_file,
                                   key=KEY_CLONE_URL):
+        """
+        Extract the value for 'key' from every crawled repository in file
+        'input_file'.
+        Output is redirected into 'output_file'.
+        """
         with open(input_file, 'r') as fr:
             with open(output_file, 'w') as fw:
                 for l in fr.readlines():
@@ -378,6 +385,116 @@ class Crawler(object):
                             for repo in _list:
                                 fw.write(str(repo[key]).strip() + "\n")
 
+    def extractReposFiltered(self, input_file, output_file,
+                             filter=None):
+        """
+        Extract any repository from 'input_file' that matches 'filter',
+        into 'output_file'.
+        """
+        flow = []
+        if filter:
+            flow = self.parseFilter(filter)
+        else:
+            print "No filter specified. Quitting..."
+            sys.exit()
+        
+        if flow[0] == -1:
+            print "Could not parse filter correctly. Quitting..."
+            sys.exit()
+            
+        fr = open(input_file, 'r')
+        fw = open(output_file, 'w') 
+        
+        result = []
+        for l in fr.readlines():
+            if not self.isComment(l):
+                if l != "" and l != "[]\n":
+                    # Found a list of repo dictionaries. Read it.
+                    _list = json.loads(l)
+                    
+                    for repo in _list:
+                        is_suitable = True
+                        
+                        # Apply filter and append 
+                        # suitable repos to the result.
+                        if flow[0] == self.FILTERKEY_STARS:
+                            # Extract stars value
+                            stars = int(repo["stargazers_count"])
+                            
+                            if flow[1] != -1:
+                                if stars != flow[1]:
+                                    is_suitable = False
+                            else:
+                                if flow[2] != -1:
+                                    # specified filter: stars > flow[2]
+                                    if stars <= flow[2]:
+                                        is_suitable = False
+                                if flow[3] != -1:
+                                    # specified filter: stars < flow[3]
+                                    if stars >= flow[3]:
+                                        is_suitable = False
+                                    
+                            if is_suitable:
+                                result.append(repo)
+                                
+        fw.write(json.dumps(result))
+                                
+        fr.close()
+        fw.close()
+                    
+    def parseFilter(self, _filter):
+        flow = [-1, -1, -1, -1]
+        
+        if _filter:
+            # Expecting filter of type 'keyword="values"'. A value can be
+            # "=5", so do not just .split("=").
+            index = _filter.find("=")
+            key   = _filter[0:index].strip()
+            val   = _filter[index+1:].strip()
+
+            if key == self.FILTERKEY_STARS and val:
+                flow[0] = self.FILTERKEY_STARS
+                
+                # Expecting "=int", ">int", "<int", ">int <int",
+                # "<int >int" or "" 
+                for _val in val.split(" "):
+                    if _val:
+                        # Ignore empty values
+                        # Check for "=int"
+                        index = _val.find("=")
+                        if index != -1:
+                            # Found "="
+
+                            # Ignore values found earlier.
+                            flow[1] = int(_val[index+1:].strip())
+                        
+                            # Break and ignore rest.
+                            break
+                        
+                        # Check for ">int"
+                        index = _val.find(">")
+                        if index != -1:
+                            # Found ">"
+                            
+                            flow[2] = int(_val[index+1:].strip())
+                            
+                            continue
+                        
+                        index = _val.find("<")
+                        if index != -1:
+                            # Found "<"
+                            
+                            flow[3] = int(_val[index+1:].strip())
+                
+                if (
+                flow[1] == -1 and flow[2] != -1 and flow[3] != -1 and 
+                flow[2] + 1 >= flow[3]):
+                    raise ValueError("Filter will not yield "
+                                     "any results: >%d <%d." % (
+                                                        flow[2], flow[3]
+                                                        ))
+        return flow
+    
     def endExecution(self):
         print "Ratelimit reached. Quitting..."
         sys.exit()
