@@ -27,8 +27,6 @@ USAGE_ARGS = [
         ]
 
 ARGS_RATELIMIT   = "ratelimit"
-# ARGS_CRAWL_1000  = "crawl1000"
-# ARGS_CRAWL_DAYS  = "crawlDays"
 ARGS_CRAWL_REPOS = "crawlRepos"
 ARGS_EXTRACT_KEYDATA = "extractInfo"
 ARGS_EXTRACTREPOS_FILTERED = "filterRepos"
@@ -43,18 +41,11 @@ def main(argv):
     flow = controlFlow(argv)
     
     if flow[0] == ARGS_RATELIMIT:
-        crawler.showRateLimit()
-        
-#     elif flow[0] == ARGS_CRAWL_1000:
-#         if len(flow) == 2:
-#             crawler.crawlSearching(flow[1])
-#         else:
-#             crawler.crawlSearching()
-#     elif flow[0] == ARGS_CRAWL_DAYS:
-#         if len(flow) == 4:
-#             crawler.crawlSearchDays(flow[1], flow[2], flow[3])
-#         else:
-#             crawler.crawlSearchDays(flow[1], flow[2])
+        _dict = crawler.getRateLimit()
+        print "Rate Limits:"
+        print "core:"  , _dict["core"]
+        print "search:", _dict["search"]
+
     elif flow[0] == ARGS_CRAWL_REPOS:
             if len(flow) == 3:
 #                 crawler.crawlReposStartingFromURL(flow[1], flow[2])
@@ -62,6 +53,7 @@ def main(argv):
                 print "todo"
             else:
                 crawler.crawlReposFromBeginning(flow[1])
+                
     elif flow[0] == ARGS_EXTRACT_KEYDATA:
         if len(flow) == 4:
             crawler.getKeyFromCrawlData(flow[1], flow[2], flow[3])
@@ -97,7 +89,7 @@ def controlFlow(argv):
         if o in (USAGE_ARGS[2][0], USAGE_ARGS[2][1]):
             if v:
                 query = v
-                print "yoyo", query
+
             else:
                 usage(argv[0])
                 sys.exit(0)
@@ -119,20 +111,12 @@ def controlFlow(argv):
     
     if argv[1] == ARGS_RATELIMIT:
         return [ARGS_RATELIMIT,]
-#     elif argv[1] == ARGS_CRAWL_1000:
-#         return [ARGS_CRAWL_1000, query] if query else [ARGS_CRAWL_1000,]
-#     elif argv[1] == ARGS_CRAWL_DAYS:
-#         if days:
-#             return (
-#                 [ARGS_CRAWL_DAYS, days[0], days[1], query] if query else 
-#                 [ARGS_CRAWL_DAYS, days[0], days[1]]
-#                  )
+
     elif argv[1] == ARGS_CRAWL_REPOS:
         if len(argv[2:]) == 1:
             return [ARGS_CRAWL_REPOS, argv[2]]
         elif len(argv[2:]) == 2:
             return [ARGS_CRAWL_REPOS, argv[2], argv[3]]
-    
     
     elif argv[1] == ARGS_EXTRACT_KEYDATA:
         if len(argv[2:]) == 2:

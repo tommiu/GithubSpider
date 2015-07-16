@@ -9,6 +9,7 @@ import sys
 import json
 import re
 import os
+import shutil
 
 class Crawler(object):
     '''
@@ -56,61 +57,30 @@ class Crawler(object):
         Constructor
         '''
     
-    def crawlSearchDays(self, start, end, q="langauge:PHP", sort=None, order=None):
-        """
-        Crawl the clone urls for the search query 'q'.
-        However, the query will be modified to only show results of
-        a certain day.
-        This will be repeated until each day in [start, end] was queried.
-        Therefore, 'start' and 'end' have to be dates of format YYYY-MM-DD.
-        
-        Some days may be skipped due to different length of months.
-        """
-        # Check start and end format first.
-        r = re.compile('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-        if not r.match(start) or not r.match(end):
-            # 'start' or 'end' have a wrong format.
-            print (
-                "'start' and 'end' are expected to be of format YYYY-MM-DD."
-                "'%s' and '%s' were given." % (start, end)
-                )
-            return -1
-        
-        else:
-            # Parameters are ok, continue
-            pass
-    
-    def crawlSearching(self, q="language:PHP", sort=None, order=None):
-        """
-        Crawl the clone urls for the search query 'q'.
-        The response is split into 10 URLs with 100 repositories each.
-        """
-        per_page = 100
-        page     = 0
-        
-        for page in range(1, 11):
-            resp = self.search(q + "&per_page=" + str(per_page) + 
-                               "&page=" + str(page))
-            
-            # Check if the response was empty, so that we can reduce
-            # the load on the GitHub API servers.
-            if not resp["items"]:
-                break
-    
-    def crawlReposFromBeginning(self, file_links):
+    def crawlReposFromBeginning(self, file_links, skip=True):
         """
         Crawl all repo links, ignoring repositories that were already 
         crawled and did not change.
         Start crawling at repository 0.
+        'skip' is used to not "recrawl" all the already crawled links to check
+        for updates. Instead, we use the last link from the crawled-links-data
+        to continue crawling new repositories.
         """
+        result = None
+        
+        current_ratelimit = self.getRateLimit()["core"]["remaining"]
+        if current_ratelimit == 0:
+            self.endExecution()
+        else:
+            result = {self.KEY_RL_REMAIN: current_ratelimit}
+
         repo   = None
         etag   = None
         since  = None
-        result = None
         url    = None
         next_link = None
         copy_only = False
-        
+
         l_backup = lambda s : s + "_backup"
 #         l_original = lambda s : s[:-7]
         
@@ -118,7 +88,6 @@ class Crawler(object):
         
         # Filehandle for writing.
         fw = None
-        open(file_links, 'a')
 
         # If a links file already exists from earlier crawls, then parse it.
         TEXT_PROCESSING = "Processing contents of file: "
@@ -129,6 +98,11 @@ class Crawler(object):
             os.rename(file_links, file_links_backup)
             
             with open(file_links_backup, 'r') as f_links:
+                if skip:
+                    # We do not want to recrawl old data, so
+                    # just copy-paste it.
+                    shutil.copyfile(file_links_backup, file_links)
+                    
                 # Open fh for writing.
                 fw = open(file_links, 'a')
                 
@@ -139,8 +113,20 @@ class Crawler(object):
                 # the given links-file.
                 counter = 0
 
-                for l in f_links.readlines():
+                if skip:
+                    # We do not want to recrawl old data.
+                    # Therefore, get the last next-link from the old data,
+                    # so that we can continue crawling from there.
+                    old_data  = f_links.readlines()[-4:]
+
+                else:
+                    old_data = f_links
+ 
+                # Parse old data.
+                for l in old_data:
                     counter += 1
+                    
+                    # Does the line start with '#', indicating a comment?
                     if self.isComment(l):
                         if self.isSince(l) and counter == 1:
                             since = self.getVal(l)
@@ -168,7 +154,7 @@ class Crawler(object):
                             # do not spam the memory with large lists of data.
                             counter = 0
 
-                            if url:
+                            if url and not skip:
                                 # Parse next
                                 result = self.nextBackupCrawl(
                                                 fw, repo, since, next_link,
@@ -176,14 +162,14 @@ class Crawler(object):
                                                 copy_only=copy_only
                                                 )
                                 
-                            else:
+                            elif not skip:
                                 # Parse first
                                 result = self.nextBackupCrawl(
                                                 fw, repo, since, next_link,
                                                 etag=etag, copy_only=copy_only
                                                 )
                             
-                            if result:
+                            if result and not skip:
                                 # Get next URL to parse.
                                 url = self.getNextURL(result, next_link)
                             
@@ -192,10 +178,14 @@ class Crawler(object):
                                     # No ratelimit remaining, continue
                                     # to only copy the old data and finish.
                                     copy_only = True
+                                    
+                            elif skip:
+                                # Get last URL to continue crawling.
+                                url = next_link
                             
                 print "Done parsing old data."
-                
-        if result and result[self.KEY_RL_REMAIN] == "0":
+        
+        if result and result[self.KEY_RL_REMAIN] == 0:
             self.endExecution()
 
         # Parsing finished or no backup file found. Start crawling new data.
@@ -210,14 +200,14 @@ class Crawler(object):
             url    = self.getNextURL(result)
 
         # Parse until ratelimit is reached.
-        while url and result[self.KEY_RL_REMAIN] > "0":
+        while url and result[self.KEY_RL_REMAIN] > 0:
             # Crawl next page
             result = self.nextCrawl(fw, url=url)
             url    = self.getNextURL(result)
 
         fw.close()
 
-        if result and result[self.KEY_RL_REMAIN] == "0":
+        if result and result[self.KEY_RL_REMAIN] == 0:
             self.endExecution()
 
     def nextBackupCrawl(self, fh, repo, since, 
@@ -272,6 +262,7 @@ class Crawler(object):
                     self.KEY_RL_REMAIN: 0,
                     self.KEY_NEXT_LINK: next_link
                     }
+            print "Copied from old data. Skipping..."
 
         return result
     
@@ -298,6 +289,7 @@ class Crawler(object):
 
             fh.write(json.dumps(result[self.KEY_CRAWLED_LINKS]) + "\n")
             fh.flush()
+            
         elif result[self.KEY_RL_REMAIN] == 0:
             result = {
                     self.KEY_RL_REMAIN: 0,
@@ -376,9 +368,11 @@ class Crawler(object):
                 
                 # Extract remaining ratelimit.
                 if self.KEY_RL_REMAIN in resp.headers:
-                    result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
+                    result[self.KEY_RL_REMAIN] = int(
+                                            resp.headers[self.KEY_RL_REMAIN]
+                                            )
                 
-                if result[self.KEY_RL_REMAIN] == "0":
+                if result[self.KEY_RL_REMAIN] == 0:
                     break
                 
                 for filter_key, filter_value in query:
@@ -399,10 +393,13 @@ class Crawler(object):
             
         # Extract remaining ratelimit.
         if self.KEY_RL_REMAIN in resp.headers:
-            result[self.KEY_RL_REMAIN] = resp.headers[self.KEY_RL_REMAIN]
+            result[self.KEY_RL_REMAIN] = int(
+                                        resp.headers[self.KEY_RL_REMAIN]
+                                        )
                 
         result[self.KEY_CRAWLED_LINKS] = crawled_links
         result[self.KEY_COUNT] = len(crawled_links)
+
 
         return result
 
@@ -481,23 +478,33 @@ class Crawler(object):
         fw.close()
                     
     def parseFilter(self, _filter):
+        """
+        Parse a given filter and extract interesting values.
+        """
         flow = [-1, -1, -1, -1]
         
         if _filter:
             # Expecting filter of type 'keyword="values"'. A value can be
             # "=5", so do not just .split("=").
             index = _filter.find("=")
-            key   = _filter[0:index].strip()
-            val   = _filter[index+1:].strip()
 
+            if index > 0:
+                key   = _filter[0:index].strip()
+                val   = _filter[index+1:].strip()
+            else:
+                raise ValueError("Filter format is wrong. You gave: %s."
+                                 "However, expected is '%s'!" % (
+                                                    _filter, "key=\"values\""
+                                                    ))
+            
             if key == self.FILTERKEY_STARS and val:
                 flow[0] = self.FILTERKEY_STARS
                 
                 # Expecting "=int", ">int", "<int", ">int <int",
                 # "<int >int" or "" 
                 for _val in val.split(" "):
+                    # Ignore empty values
                     if _val:
-                        # Ignore empty values
                         # Check for "=int"
                         index = _val.find("=")
                         if index != -1:
@@ -518,6 +525,7 @@ class Crawler(object):
                             
                             continue
                         
+                        # Check for "<int"
                         index = _val.find("<")
                         if index != -1:
                             # Found "<"
@@ -526,11 +534,21 @@ class Crawler(object):
                 
                 if (
                 flow[1] == -1 and flow[2] != -1 and flow[3] != -1 and 
-                flow[2] + 1 >= flow[3]):
+                flow[2] + 1 >= flow[3]
+                ):
                     raise ValueError("Filter will not yield "
                                      "any results: >%d <%d." % (
                                                         flow[2], flow[3]
                                                         ))
+                elif (
+                flow[1] == -1 and flow[2] == -1 and flow[3] == -1      
+                ):
+                    raise ValueError(
+                            "Filter could not be parsed. \nExample filters: "
+                            "stars=\"=2\", stars=\">2 <5\", stars=\"<10\""
+                            )
+            else:
+                raise ValueError("Filter not known: %s" % (key))
         return flow
     
     def endExecution(self):
@@ -618,14 +636,11 @@ class Crawler(object):
             
         return decoded
     
-    def showRateLimit(self):
+    def getRateLimit(self):
         resp = r.get(self.addOAuth(self.LINK_RATE_LIMIT))
             
         _dict = json.loads(resp.text)["resources"]
-        
-        print "Rate Limits:"
-        print "core:"  , _dict["core"]
-        print "search:", _dict["search"]
+        return _dict
 
     def addOAuth(self, url):
         """
@@ -638,3 +653,47 @@ class Crawler(object):
             url += "?" + token_query 
     
         return url
+    
+    
+    ### LEGACY CODE
+    ### ~~~~~~~~~~~
+    def crawlSearchDays(self, start, end, q="langauge:PHP", sort=None, order=None):
+        """
+        Crawl the clone urls for the search query 'q'.
+        However, the query will be modified to only show results of
+        a certain day.
+        This will be repeated until each day in [start, end] was queried.
+        Therefore, 'start' and 'end' have to be dates of format YYYY-MM-DD.
+        
+        Some days may be skipped due to different length of months.
+        """
+        # Check start and end format first.
+        r = re.compile('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        if not r.match(start) or not r.match(end):
+            # 'start' or 'end' have a wrong format.
+            print (
+                "'start' and 'end' are expected to be of format YYYY-MM-DD."
+                "'%s' and '%s' were given." % (start, end)
+                )
+            return -1
+        
+        else:
+            # Parameters are ok, continue
+            pass
+    
+    def crawlSearching(self, q="language:PHP", sort=None, order=None):
+        """
+        Crawl the clone urls for the search query 'q'.
+        The response is split into 10 URLs with 100 repositories each.
+        """
+        per_page = 100
+        page     = 0
+        
+        for page in range(1, 11):
+            resp = self.search(q + "&per_page=" + str(per_page) + 
+                               "&page=" + str(page))
+            
+            # Check if the response was empty, so that we can reduce
+            # the load on the GitHub API servers.
+            if not resp["items"]:
+                break
