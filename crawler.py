@@ -15,6 +15,7 @@ from github.session import Session as GithubSession
 from github.repository_list import RepositoryList
 from github.exceptions import RatelimitExceededException
 from github.repository import Repository
+import signal
 
 class Crawler(object):
     '''
@@ -83,104 +84,131 @@ class Crawler(object):
         
         # Filehandle for writing.
         fw = None
-
+        f_links = None
+        
         TEXT_PROCESSING = "Processing contents of file: "
         # If a links file already exists from earlier crawls, then parse it.
         if os.path.isfile(file_links):
             print "File '%s' exists already. Will be appending to it." % (file_links)
 
             file_links_backup = file_links + "_backup"
+            
+            def restoreBackup(signum, frame):
+                """
+                Inner function: Restore original file from backup upon 
+                termination in backup process.
+                """
+                if fw:
+                    fw.close()
+
+                if f_links:
+                    f_links.close()
+
+                # Copy backup file back.
+                shutil.copyfile(file_links_backup, file_links)
+            
+            # Catch process-kill signal.
+            signal.signal(signal.SIGTERM, restoreBackup)
+            
+            # Also catch Ctrl-C/D.
+            signal.signal(signal.SIGINT, restoreBackup)
+
             os.rename(file_links, file_links_backup)
             
-            with open(file_links_backup, 'r') as f_links:
-                if skip:
-                    # We do not want to recrawl old data, so
-                    # just copy-paste it.
-                    shutil.copyfile(file_links_backup, file_links)
+            f_links = open(file_links_backup, 'r')
+            if skip:
+                # We do not want to recrawl old data, so
+                # just copy-paste it.
+                shutil.copyfile(file_links_backup, file_links)
                     
-                # Open fh for writing.
-                fw = open(file_links, 'a')
-                
-                print TEXT_PROCESSING + str(file_links) + "..."
-                sys.stdout.flush()
-                
-                # 'counter' determines the correct sequence/file-format of
-                # the given links-file.
-                counter = 0
+            # Open fh for writing.
+            fw = open(file_links, 'a')
+            
+            print TEXT_PROCESSING + str(file_links) + "..."
+            sys.stdout.flush()
+            
+            # 'counter' determines the correct sequence/file-format of
+            # the given links-file.
+            counter = 0
 
-                if skip:
-                    # We do not want to recrawl old data.
-                    # Therefore, get the last next-link from the old data,
-                    # so that we can continue crawling from there.
-                    old_data  = f_links.readlines()[-4:]
+            if skip:
+                # We do not want to recrawl old data.
+                # Therefore, get the last next-link from the old data,
+                # so that we can continue crawling from there.
+                old_data  = f_links.readlines()[-4:]
 
-                else:
-                    old_data = f_links
+            else:
+                old_data = f_links
  
-                etag  = None
-                repos = None
-                next_url = None
+            etag  = None
+            repos = None
+            next_url = None
+            
+            # Parse old data.
+            for l in old_data:
+                counter += 1
                 
-                # Parse old data.
-                for l in old_data:
-                    counter += 1
-                    
-                    # Does the line start with '#', indicating a comment?
-                    if self.isComment(l):
-                        if self.isURL(l) and counter == 1:
-                            url = self.getVal(l, sep=' ', index=2)
+                # Does the line start with '#', indicating a comment?
+                if self.isComment(l):
+                    if self.isURL(l) and counter == 1:
+                        url = self.getVal(l, sep=' ', index=2)
 
-                        elif self.isNext(l) and counter == 2:
-                            next_url = self.getVal(l, sep=' ', index=2)
-                            
-                        elif self.isEtag(l) and counter == 3:
-                            etag = self.getVal(l)
+                    elif self.isNext(l) and counter == 2:
+                        next_url = self.getVal(l, sep=' ', index=2)
                         
-                        else:
-                            print l
-                            print "Encountered an error with file '%s'." % (
-                                                                    file_links
-                                                                    )
-                            sys.exit()
-                            
+                    elif self.isEtag(l) and counter == 3:
+                        etag = self.getVal(l)
+                    
                     else:
-                        if l != "" and counter == 4:
-                            # We are done with parsing a single block of data,
-                            # use this information to crawl data and see,
-                            # if GitHub answers with new or old data.
-                            # -> The link file can get huge and this way, we 
-                            # do not spam the memory with large lists of data.
-                            counter = 0
-                            
-                            repos = RepositoryList(
-                                        url, etag, repos=l.strip(),
-                                        next_url=next_url
-                                        )
-                            
-                            # We are done with parsing a single block of data,
-                            # use this information to crawl data and see,
-                            # if GitHub answers with new or old data.
-                            # -> The link file can get huge and this way, we 
-                            # do not spam the memory with large lists of data.
-                            counter = 0
+                        print l
+                        print "Encountered an error with file '%s'." % (
+                                                                file_links
+                                                                )
+                        sys.exit()
+                        
+                else:
+                    if l != "" and counter == 4:
+                        # We are done with parsing a single block of data,
+                        # use this information to crawl data and see,
+                        # if GitHub answers with new or old data.
+                        # -> The link file can get huge and this way, we 
+                        # do not spam the memory with large lists of data.
+                        counter = 0
+                        
+                        repos = RepositoryList(
+                                    url, etag, repos=l.strip(),
+                                    next_url=next_url
+                                    )
+                        
+                        # We are done with parsing a single block of data,
+                        # use this information to crawl data and see,
+                        # if GitHub answers with new or old data.
+                        # -> The link file can get huge and this way, we 
+                        # do not spam the memory with large lists of data.
+                        counter = 0
 
-                            if not skip:
-                                try:
-                                    # Update data, by requesting Github API.
-                                    self.nextBackupCrawl(fw, repos, 
-                                                         copy_only=copy_only)
-                                    
-                                except RatelimitExceededException:
-                                        # No ratelimit remaining, continue
-                                        # to only copy the old data and finish.
-                                        copy_only = True
+                        if not skip:
+                            try:
+                                # Update data, by requesting Github API.
+                                self.nextBackupCrawl(fw, repos, 
+                                                     copy_only=copy_only)
+                                
+                            except RatelimitExceededException:
+                                    # No ratelimit remaining, continue
+                                    # to only copy the old data and finish.
+                                    copy_only = True
+            
+            if repos:
+                url = repos.getNextURL()
                 
-                if repos:
-                    url = repos.getNextURL()
-                print "Done parsing old data."
-                
-                if copy_only:
-                    self.endExecution()
+            # Remove backup signal handlers.
+            # SIG_DFL is the standard signal for any signal handler.
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            signal.signal(signal.SIGINT,  signal.SIG_DFL)
+            print "Done parsing old data."
+            
+            if copy_only:
+                self.endExecution()
         
         repos = None
         
