@@ -8,9 +8,9 @@ import json
 from github.exceptions import *
 
 class Repository(object):
-    '''
-    classdocs
-    '''
+    """
+    Class representing a repository from Github.
+    """
 
     def __init__(self, _dict):
         '''

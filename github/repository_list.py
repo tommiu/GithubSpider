@@ -8,9 +8,9 @@ from github.repository import Repository
 from github.exceptions import UnavailableRepoException
 
 class RepositoryList(object):
-    '''
-    classdocs
-    '''
+    """
+    Class representing a list of repositories from Github.
+    """
 
     def __init__(self, url=None, etag=None, repos="[]", next_url=None):
         '''
