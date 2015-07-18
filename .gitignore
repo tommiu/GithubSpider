@@ -1,0 +1,5 @@
+*.pyc
+convert.py*
+.fuse*
+crawled/
+backups/

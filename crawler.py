@@ -281,11 +281,14 @@ class Crawler(object):
             with open(output_file, 'w') as fw:
                 for l in fr.readlines():
                     if not self.isComment(l):
-                        if l != "" and l != "[]\n":
-                            # Found a list of repo dictionaries. Read it.
-                            _list = json.loads(l)
-                            for repo in _list:
-                                fw.write(str(repo[key]).strip() + "\n")
+                        if l != "":
+                            repos = RepositoryList(repos=l)
+                            
+                            if not repos.isEmpty():
+                                # Found a list of repo dictionaries.
+                                # Read it and get its value for 'key'.
+                                for repo in repos:
+                                    fw.write(str(repo[key]).strip() + "\n")
 
     def extractReposFiltered(self, input_file, output_file,
                              _filter=None):
@@ -307,21 +310,20 @@ class Crawler(object):
         fr = open(input_file, 'r')
         fw = open(output_file, 'w') 
         
-        result = []
+        filtered_repos = RepositoryList()
         for l in fr.readlines():
             if not self.isComment(l):
                 if l != "" and l != "[]\n":
                     # Found a list of repo dictionaries. Read it.
-                    _list = json.loads(l)
+                    repos = RepositoryList(repos=l)
+                    is_suitable = True
                     
-                    for repo in _list:
-                        is_suitable = True
-                        
+                    for repo in repos:
                         # Apply filter and append 
                         # suitable repos to the result.
                         if flow[0] == self.FILTERKEY_STARS:
                             # Extract stars value
-                            stars = int(repo["stargazers_count"])
+                            stars = repo.getStars()
                             
                             if flow[1] != -1:
                                 if stars != flow[1]:
@@ -337,9 +339,9 @@ class Crawler(object):
                                         is_suitable = False
                                     
                             if is_suitable:
-                                result.append(repo)
+                                filtered_repos += repo
                                 
-        fw.write(json.dumps(result))
+        fw.write(str(filtered_repos))
                                 
         fr.close()
         fw.close()

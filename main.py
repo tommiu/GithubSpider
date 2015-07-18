@@ -27,9 +27,9 @@ USAGE_ARGS = [
         ]
 
 ARGS_RATELIMIT   = "ratelimit"
-ARGS_CRAWL_REPOS = "crawlRepos"
-ARGS_EXTRACT_KEYDATA = "extractInfo"
-ARGS_EXTRACTREPOS_FILTERED = "filterRepos"
+ARGS_CRAWL_REPOS = "crawl"
+ARGS_EXTRACT_KEYDATA = "extract"
+ARGS_EXTRACTREPOS_FILTERED = "filter"
 
 def main(argv):
     """

@@ -12,14 +12,14 @@ class RepositoryList(object):
     classdocs
     '''
 
-    def __init__(self, url, etag, repos="[]", next_url=None):
+    def __init__(self, url=None, etag=None, repos="[]", next_url=None):
         '''
         Constructor
         '''
-        if not url:
-            raise ValueError("Parameter '%s' not specified." % ("url"))
-        if not etag:
-            raise ValueError("Parameter '%s' not specified." % ("etag"))
+#         if not url:
+#             raise ValueError("Parameter '%s' not specified." % ("url"))
+#         if not etag:
+#             raise ValueError("Parameter '%s' not specified." % ("etag"))
         
         self.url   = url
         self.etag  = etag
@@ -53,6 +53,7 @@ class RepositoryList(object):
         
     def __iadd__(self, other):
         self.repos.append(other)
+        return self
     
     def __str__(self):
         """
@@ -64,6 +65,18 @@ class RepositoryList(object):
             repos_decoded.append(repo.getDict())
             
         return json.dumps(repos_decoded)
+    
+    def __iter__(self):
+        """
+        Iterate over the list of repositories in self.repos.
+        """
+        ctr = 0
+        while ctr < len(self.repos):
+            yield self.repos[ctr]
+            ctr += 1
+    
+    def isEmpty(self):
+        return True if not self.repos else False
     
     def getURL(self):
         return self.url

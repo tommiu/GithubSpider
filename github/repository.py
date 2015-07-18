@@ -5,6 +5,7 @@ Created on Jul 17, 2015
 '''
 
 import json
+from github.exceptions import *
 
 class Repository(object):
     '''
@@ -42,11 +43,32 @@ class Repository(object):
             
         return True
     
+    
     def __str__(self):
         return json.dumps(self._dict)
     
+    def __getitem__(self, _key):
+        return self.getValue(_key)
+    
+    def getValue(self, _key):
+        """
+        General method to acquire values associated with '_key'.
+        """
+        if _key in self._dict:
+            return self._dict[_key]
+        else:
+            raise KeyNotFoundException(_key)
+        
+    def getStars(self):
+        try:
+            KEY = "stargazers_count"
+            return self.getValue(KEY)
+        except KeyNotFoundException:
+            raise DidNotCrawlRepoDetailsException(KEY)
+    
     def getURL(self):
-        return self._dict["url"]
+        KEY = "url"
+        return self.getValue(KEY)
     
     def getDict(self):
         return self._dict
