@@ -14,6 +14,7 @@ import shutil
 from github.session import Session as GithubSession
 from github.repository_list import RepositoryList
 from github.exceptions import RatelimitExceededException
+from github.repository import Repository
 
 class Crawler(object):
     '''
@@ -53,6 +54,10 @@ class Crawler(object):
     
     COMMENT_CHAR = "#"
     
+    REPO_KEY_LANGUAGE = "language"
+    
+    DEFAULT_REPO_FILTER = {REPO_KEY_LANGUAGE: "PHP"}
+    
     # GitHub Session object
     s = None
     
@@ -62,8 +67,11 @@ class Crawler(object):
         '''
         # Setup authentication and settings
         self.s = GithubSession(self.OAUTH, self.HEADER_USER_AGENT)
-
-    def crawlRepos(self, file_links, skip=False):
+    
+    def crawlReposWUpdate(self, data_filename):
+        self.crawlRepos(data_filename, skip=False)
+    
+    def crawlRepos(self, file_links, skip=True):
         current_ratelimit = self.getRateLimit()["core"]["remaining"]
         if current_ratelimit == 0:
             self.endExecution()
@@ -159,9 +167,8 @@ class Crawler(object):
                             if not skip:
                                 try:
                                     # Update data, by requesting Github API.
-                                    result = self.nextBackupCrawl(
-                                                    fw, repos, copy_only=copy_only
-                                                    )
+                                    self.nextBackupCrawl(fw, repos, 
+                                                         copy_only=copy_only)
                                     
                                 except RatelimitExceededException:
                                         # No ratelimit remaining, continue
@@ -171,6 +178,9 @@ class Crawler(object):
                 if repos:
                     url = repos.getNextURL()
                 print "Done parsing old data."
+                
+                if copy_only:
+                    self.endExecution()
         
         repos = None
         
@@ -216,6 +226,9 @@ class Crawler(object):
             if result:
                 print "Found update!"
         
+        # Filter results
+        repository_list.filter(self.s, self.DEFAULT_REPO_FILTER)
+        
         self.writeRepositoryList(fh, repository_list)
         
         return result
@@ -226,16 +239,19 @@ class Crawler(object):
         'url' is used to specify the next parse-URL.
         """
         result = None
-        
-        format = "Crawling: %s"
+
+        _format = "Crawling: %s"
         if url:
-            print format % url
+            print _format % url
             result = self.s.getRepos(url=url)
         else:
-            print format % "From beginning."
+            print _format % "From beginning."
             result = self.s.getRepos()
 
-        # Write new resutls from Github.
+        # Filter results
+        result.filter(self.s, self.DEFAULT_REPO_FILTER)
+
+        # Write new results from Github.
         self.writeRepositoryList(fh, result)
 
         return result
@@ -254,113 +270,6 @@ class Crawler(object):
         fh.write(str(repository_list) + "\n")
         fh.flush()
         
-    def crawlRepoLinks(self, since=0, query=[["language", "PHP"]], etag=None,
-                       url=None):
-        """
-        Get public repositories information since 'since', that fit to 'query'.
-        
-        'etag' can be used to save API-query ratelimit, because the server will
-        simply answer with code 304 to indicate no changes since the same last
-        query.
-        
-        'url' can be used instead of 'since' to directly 
-        provide the correct url. 
-        """
-        result = {}
-        crawled_links = []
-        
-        headers = self.HEADERS.copy()
-        if etag:
-            headers["If-None-Match"] = etag
-            
-        resp = None
-        
-        if not url:
-            print "Crawling, starting from repository %d." % (since)
-            result[self.KEY_SINCE] = since
-            resp = r.get(self.addOAuth(self.LINK_REPO_API + "?since=" + str(since)),
-                         headers=headers)
-            
-        else:
-            print "Crawling next: %s." % (url)
-            
-            # Extract the value for 'since' from 'url'.
-            since = None
-            _, _help = url.split("?")
-            args = _help.split("&")
-            for arg in args:
-                if arg.startswith("since"):
-                    _, since = arg.split("=")
-                    break
-
-            result[self.KEY_SINCE] = since
-            
-            resp = r.get(url, headers=headers)
-            
-        # Extract necessary information from response.
-        if resp.links:
-            # Extract next link.
-            result[self.KEY_NEXT_URL] = resp.links["next"]["url"]
-            
-        # Extract etag.
-        if self.KEY_ETAG in resp.headers:
-            result[self.KEY_ETAG] = resp.headers[self.KEY_ETAG]
-     
-        # Extract status code.
-        result[self.KEY_STATUS_CODE] = resp.status_code
-        
-        # 304 = old data.
-        # 403 = rate limit exceeded.
-        if resp.status_code != 304 and resp.status_code != 403:
-            # If GitHub answered with new results, parse them.
-            decoded = json.loads(resp.text)
-
-            for _dict in decoded:
-                # Check if filters apply to link.
-                does_fit = True
-
-                resp = r.get(self.addOAuth(_dict["url"]),
-                         headers=headers)
-                decoded = json.loads(resp.text)
-                
-                # Extract remaining ratelimit.
-                if self.KEY_RL_REMAIN in resp.headers:
-                    result[self.KEY_RL_REMAIN] = int(
-                                            resp.headers[self.KEY_RL_REMAIN]
-                                            )
-                
-                if result[self.KEY_RL_REMAIN] == 0:
-                    break
-                
-                for filter_key, filter_value in query:
-                    if filter_key in decoded:
-                        if not decoded[filter_key] == filter_value:
-                            does_fit = False
-                            break
-                    else:
-                        does_fit = False
-                        break
-                
-                if does_fit:
-#                     crawled_links.append(decoded["clone_url"])
-                    crawled_links.append(decoded)
-
-        elif resp.status_code == 304:
-            # We already know these repos, skip them.
-            print "Already crawled repo - skipping."
-            
-        # Extract remaining ratelimit.
-        if self.KEY_RL_REMAIN in resp.headers:
-            result[self.KEY_RL_REMAIN] = int(
-                                        resp.headers[self.KEY_RL_REMAIN]
-                                        )
-                
-        result[self.KEY_CRAWLED_LINKS] = crawled_links
-        result[self.KEY_COUNT] = len(crawled_links)
-
-
-        return result
-
     def getKeyFromCrawlData(self, input_file, output_file,
                                   key=KEY_CLONE_URL):
         """
@@ -652,159 +561,3 @@ class Crawler(object):
             # the load on the GitHub API servers.
             if not resp["items"]:
                 break
-            
-    def crawlReposFromBeginning(self, file_links, skip=False):
-        """
-        Crawl all repo links, ignoring repositories that were already 
-        crawled and did not change.
-        Start crawling at repository 0.
-        'skip' is used to not "recrawl" all the already crawled links to check
-        for updates. Instead, we use the last link from the crawled-links-data
-        to continue crawling new repositories.
-        """
-        result = None
-
-        current_ratelimit = self.getRateLimit()["core"]["remaining"]
-        if current_ratelimit == 0:
-            self.endExecution()
-        else:
-            result = {self.KEY_RL_REMAIN: current_ratelimit}
-
-        repo   = None
-        etag   = None
-        since  = None
-        url    = None
-        next_link = None
-        copy_only = False
-
-        l_backup = lambda s : s + "_backup"
-#         l_original = lambda s : s[:-7]
-        
-        file_links_backup = ""
-        
-        # Filehandle for writing.
-        fw = None
-
-        TEXT_PROCESSING = "Processing contents of file: "
-        # If a links file already exists from earlier crawls, then parse it.
-        if os.path.isfile(file_links):
-            print "File '%s' exists already. Will be appending to it." % (file_links)
-
-            file_links_backup = l_backup(file_links)
-            os.rename(file_links, file_links_backup)
-            
-            with open(file_links_backup, 'r') as f_links:
-                if skip:
-                    # We do not want to recrawl old data, so
-                    # just copy-paste it.
-                    shutil.copyfile(file_links_backup, file_links)
-                    
-                # Open fh for writing.
-                fw = open(file_links, 'a')
-                
-                print TEXT_PROCESSING + str(file_links) + "..."
-                sys.stdout.flush()
-                
-                # 'counter' determines the correct sequence/file-format of
-                # the given links-file.
-                counter = 0
-
-                if skip:
-                    # We do not want to recrawl old data.
-                    # Therefore, get the last next-link from the old data,
-                    # so that we can continue crawling from there.
-                    old_data  = f_links.readlines()[-4:]
-
-                else:
-                    old_data = f_links
- 
-                # Parse old data.
-                for l in old_data:
-                    counter += 1
-                    
-                    # Does the line start with '#', indicating a comment?
-                    if self.isComment(l):
-                        if self.isSince(l) and counter == 1:
-                            since = self.getVal(l)
-
-                        elif self.isNext(l) and counter == 2:
-                            next_link = self.getVal(l, sep=' ', index=2)
-                            
-                        elif self.isEtag(l) and counter == 3:
-                            etag = self.getVal(l)
-                        
-                        else:
-                            print l
-                            print "Encountered an error with file '%s'." % (
-                                                                    file_links
-                                                                    )
-                            sys.exit()
-                    else:
-                        if l != "" and counter == 4:
-                            repo = RepositoryList(
-                                        since, etag, repos=l.strip(),
-                                        next_url=next_link
-                                        )
-                            print repo
-                            sys.exit()
-                            # We are done with parsing a single block of data,
-                            # use this information to crawl data and see,
-                            # if GitHub answers with new or old data.
-                            # -> The link file can get huge and this way, we 
-                            # do not spam the memory with large lists of data.
-                            counter = 0
-
-                            if url and not skip:
-                                # Parse next
-                                result = self.nextBackupCrawl(
-                                                fw, repo, 
-                                                copy_only=copy_only
-                                                )
-                                
-                            elif not skip:
-                                # Parse first
-                                result = self.nextBackupCrawl(
-                                                fw, repo, since, next_link,
-                                                etag=etag, copy_only=copy_only
-                                                )
-                            
-                            if result and not skip:
-                                # Get next URL to parse.
-                                url = self.getNextURL(result, next_link)
-
-                                # Check if we have ratelimit remaining.
-                                if result[self.KEY_RL_REMAIN] == 0:    
-                                    # No ratelimit remaining, continue
-                                    # to only copy the old data and finish.
-                                    copy_only = True
-                                    
-                            elif skip:
-                                # Get last URL to continue crawling.
-                                url = next_link
-                            
-                print "Done parsing old data."
-        
-        if result and result[self.KEY_RL_REMAIN] == 0:
-            self.endExecution()
-
-        # Parsing finished or no backup file found. Start crawling new data.
-        if not fw or (fw and not url):
-            # There was no backup file or we didn't find appropriate data
-            # in backup file. Start crawling from the beginning.
-            if not fw:
-                fw = open(file_links, 'a')
-
-            # Parse first
-            result = self.nextCrawl(fw)
-            url    = self.getNextURL(result)
-
-        # Parse until ratelimit is reached.
-        while url and result[self.KEY_RL_REMAIN] > 0:
-            # Crawl next page
-            result = self.nextCrawl(fw, url=url)
-            url    = self.getNextURL(result)
-
-        fw.close()
-
-        if result and result[self.KEY_RL_REMAIN] == 0:
-            self.endExecution()

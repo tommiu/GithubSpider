@@ -7,9 +7,10 @@ Created on Jul 17, 2015
 import requests
 import json
 
-from exceptions import RatelimitExceededException
+from exceptions import *
 from github.repository_list import RepositoryList
 import sys
+from github.repository import Repository
 
 class Session(object):
     """
@@ -23,8 +24,9 @@ class Session(object):
     URL_RATE_LIMIT = URL_API + "/rate_limit"
     
     KEY_ETAG = "ETag"
+    KEY_RL_REMAIN = "X-RateLimit-Remaining"
     
-    STATUS_RATELIMIT_EXCEEDED = 403
+    STATUS_UNAVAILABLE = 403
 
     def __init__(self, OAuth, user_agent):
         """
@@ -76,6 +78,14 @@ class Session(object):
         
         return repos
     
+    def getRepo(self, url):
+        """
+        Query a single repository.
+        """
+        response = self.sessionRequestGet(url)
+        
+        return Repository(response.text)
+    
     def update(self, repository_list):
         """
         Query API for an updated list of 'repository_list'.
@@ -110,9 +120,15 @@ class Session(object):
         else:
             response = requests.get(url, headers=self.HEADERS)
         
-        if response.status_code == self.STATUS_RATELIMIT_EXCEEDED:
-            raise RatelimitExceededException()
-        
+        if response.status_code == self.STATUS_UNAVAILABLE:
+            if response.headers[self.KEY_RL_REMAIN] == 0:
+                # Ratelimit 0 reached.
+                raise RatelimitExceededException()
+            
+            else:
+                # Unavailable resource
+                raise UnavailableRepoException()
+            
         return response
     
     def addOAuth(self, url):
