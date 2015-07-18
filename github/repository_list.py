@@ -16,17 +16,12 @@ class RepositoryList(object):
         '''
         Constructor
         '''
-#         if not url:
-#             raise ValueError("Parameter '%s' not specified." % ("url"))
-#         if not etag:
-#             raise ValueError("Parameter '%s' not specified." % ("etag"))
-        
         self.url   = url
         self.etag  = etag
         self.next_url = next_url
-        
+
         self.setRepos(repos)
-    
+
     def filter(self, session, _filter):
         """
         Remove repositories from list, that do not match filter.
