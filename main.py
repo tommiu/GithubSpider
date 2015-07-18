@@ -52,7 +52,7 @@ def main(argv):
 #                 crawler.crawlReposFromBeginning(flow[1], flow[2])
                 print "todo"
             else:
-                crawler.crawlReposFromBeginning(flow[1])
+                crawler.crawlRepos(flow[1])
                 
     elif flow[0] == ARGS_EXTRACT_KEYDATA:
         if len(flow) == 4:
