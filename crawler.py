@@ -81,7 +81,7 @@ class Crawler(object):
         copy_only = False
         
         file_links_backup = ""
-        
+
         # Filehandle for writing.
         fw = None
         f_links = None
