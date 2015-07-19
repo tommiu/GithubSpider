@@ -1,7 +1,7 @@
 '''
 Created on Jul 17, 2015
 
-@author: tommi
+@author: Tommi Unruh
 '''
 
 import requests
@@ -9,7 +9,6 @@ import json
 
 from exceptions import *
 from github.repository_list import RepositoryList
-import sys
 from github.repository import Repository
 
 class Session(object):

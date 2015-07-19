@@ -1,7 +1,7 @@
 '''
 Created on Jul 17, 2015
 
-@author: tommi
+@author: Tommi Unruh
 '''
 
 import json
