@@ -7,6 +7,7 @@ Created on Jul 4, 2015
 from crawler import Crawler
 import sys
 import getopt
+from args_parser import ArgsParser
 
 USAGE_ARGS = [
         ("ratelimit", "", "Show current rate limit"),
@@ -37,8 +38,10 @@ def main(argv):
     acts accordingly. 
     """
     crawler = Crawler()
+    parser = ArgsParser()
+    flow = parser.parseArgs(argv[1:])
     
-    flow = controlFlow(argv)
+#     flow = controlFlow(argv)
     
     if flow[0] == ARGS_RATELIMIT:
         _dict = crawler.getRateLimit()
@@ -47,21 +50,19 @@ def main(argv):
         print "search:", _dict["search"]
 
     elif flow[0] == ARGS_CRAWL_REPOS:
-            if len(flow) == 3:
-#                 crawler.crawlReposStartingFromURL(flow[1], flow[2])
-#                 crawler.crawlReposFromBeginning(flow[1], flow[2])
-                print "todo"
+            if len(flow[1:]) == 2:
+                crawler.crawlRepos(flow[1], skip=False)
             else:
                 crawler.crawlRepos(flow[1])
                 
     elif flow[0] == ARGS_EXTRACT_KEYDATA:
-        if len(flow) == 4:
+        if len(flow[1:]) == 3:
             crawler.getKeyFromCrawlData(flow[1], flow[2], flow[3])
         else:
             crawler.getKeyFromCrawlData(flow[1], flow[2])
     
     elif flow[0] == ARGS_EXTRACTREPOS_FILTERED:
-        if len(flow) == 4:
+        if len(flow[1:]) == 3:
             crawler.extractReposFiltered(flow[1], flow[2], flow[3])
             
 def controlFlow(argv):
