@@ -332,7 +332,7 @@ class ModeArgsParser(object):
                         found_permitted_arg = True
                     else:
                         raise MissingValueException(orig_key)
-        
+
         if not found_permitted_arg:
             raise WrongParameterException(mode, orig_key)
         
