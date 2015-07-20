@@ -7,7 +7,7 @@ Created on Jul 4, 2015
 from crawler import Crawler
 import sys
 import getopt
-from args_parser import ArgsParser
+from args_parser import ModeArgsParser
 
 USAGE_ARGS = [
         ("ratelimit", "", "Show current rate limit"),
@@ -27,6 +27,7 @@ USAGE_ARGS = [
         ("-h", "--help"  , "Print this help."),
         ]
 
+ARGS_HELP = "help"
 ARGS_RATELIMIT   = "ratelimit"
 ARGS_CRAWL_REPOS = "crawl"
 ARGS_EXTRACT_KEYDATA = "extract"
@@ -37,11 +38,15 @@ def main(argv):
     Entry point of execution. Handles program arguments and
     acts accordingly. 
     """
+    # Setup command line arguments.
+    parser = ModeArgsParser()
+    setupArgs(parser)
     crawler = Crawler()
-    parser = ArgsParser()
-    flow = parser.parseArgs(argv[1:])
     
-#     flow = controlFlow(argv)
+    flow = parser.parseArgs(argv[1], argv[2:])
+    
+    if flow[0] == ARGS_HELP:
+        parser.printHelp(argv[0])
     
     if flow[0] == ARGS_RATELIMIT:
         _dict = crawler.getRateLimit()
@@ -64,101 +69,60 @@ def main(argv):
     elif flow[0] == ARGS_EXTRACTREPOS_FILTERED:
         if len(flow[1:]) == 3:
             crawler.extractReposFiltered(flow[1], flow[2], flow[3])
-            
-def controlFlow(argv):
+
+def setupArgs(parser):
     """
-    Handle command line arguments.
+    Setup command line arguments combinations.
     """
-    # argv[1] determines code control flow.
-    if len(argv) < 2:
-        usage(argv[0])
-        sys.exit(0)
+    # Ratelimit: ratelimit
+    explanation = "Check your ratelimit."
+    parser.addArgumentsCombination(ARGS_RATELIMIT, explanation=explanation)
     
-    query = None
-    days  = None
-    opts  = None
-    try:
-        opts, _ = getopt.getopt(argv[2:], "hq:d:", ["help", "query=",
-                                                    "days="])
-
-    except getopt.GetoptError as err:
-        print str(err)
-        usage(argv[0])
-        sys.exit(0)
-
-    for o, v in opts:
-        if o in (USAGE_ARGS[2][0], USAGE_ARGS[2][1]):
-            if v:
-                query = v
-
-            else:
-                usage(argv[0])
-                sys.exit(0)
-        
-        # -d, --days
-        elif o in(USAGE_ARGS[3][0], USAGE_ARGS[3][1]):
-            v = v.replace(" ", "")
-            days = v.split(",")
-            if len(days) != 2:
-                usage(argv[0])
-                sys.exit(0)
-        # -h, --help
-        elif o in(USAGE_ARGS[-1][0], USAGE_ARGS[-1][1]):
-            usage(argv[0])
-            sys.exit(0)
-        ## -i, --ignore
-        #elif o in(USAGE_ARGS[1][0], USAGE_ARGS[1][1]):
-        #    ignore_arg = v
+    # Help: help
+    explanation = "Print this help."
+    parser.addArgumentsCombination(ARGS_HELP, explanation=explanation)
     
-    if argv[1] == ARGS_RATELIMIT:
-        return [ARGS_RATELIMIT,]
-
-    elif argv[1] == ARGS_CRAWL_REPOS:
-        if len(argv[2:]) == 1:
-            return [ARGS_CRAWL_REPOS, argv[2]]
-        elif len(argv[2:]) == 2:
-            return [ARGS_CRAWL_REPOS, argv[2], argv[3]]
+    # Crawl repos: crawl -in file -out file (-s/--skip)
+    explanation = (
+                "Crawl repositories from Github.com "
+                "to file specified with \"-in\". "
+                "-ds/--dontskip can be used to first check for updates "
+                "for already crawled repositories in file. "
+                "The input file will be renamed to input_file_backup."
+                )
+    parser.addArgumentsCombination(
+                                ARGS_CRAWL_REPOS, [["in=", None]],
+                                [["ds", "dontskip"],],
+                                explanation=explanation
+                                )
     
-    elif argv[1] == ARGS_EXTRACT_KEYDATA:
-        if len(argv[2:]) == 2:
-            return [ARGS_EXTRACT_KEYDATA, argv[2], argv[3]]
-        elif len(argv[2:]) == 3:
-            return [ARGS_EXTRACT_KEYDATA, argv[2], argv[3], argv[4]]
-        
-    elif argv[1] == ARGS_EXTRACTREPOS_FILTERED:
-        if len(argv[2:]) == 3:
-            return [ARGS_EXTRACTREPOS_FILTERED, argv[2], argv[3], argv[4]]
+    explanation = (
+                "Extract the value associated with '-k/--key' from "
+                "crawled repositories in '-in' and write it to '-out'."
+                "Default for 'k/--key' is 'stargazers_count', which "
+                "states how often a repository got stared."
+                )
+    # Extract key data: extract -in file -out file (-k/--key)
+    parser.addArgumentsCombination(ARGS_EXTRACT_KEYDATA,
+                                   [["in=", None], ["out=", None]], 
+                                   [["k=", "key"]],
+                                   explanation=explanation
+                                   )
     
-    usage(argv[0])
-    sys.exit(0)
-
-def usage(path):
-    """
-    Prints help.
-    """
-    usage = "[%s/%s] <options>" % (
-                                            ARGS_RATELIMIT, "-h"
-                                            )
-    
-    # for each option available, construct its usage string
-    for option, longoption, description in USAGE_ARGS:
-        usage += "\n\t%s%s%s\t:\t%s\n" % (
-                                    option, 
-                                    ", " if longoption else "", 
-                                    longoption, 
-                                    description
-                                    )
-
-    slash_count = path.count("/")
-    
-    # shorten program path if necessary for readability
-    if slash_count:        
-        slash_index = path.rfind("/")
-        
-        if slash_count > 2:
-            path = ".../" + path[slash_index+1:]
-            
-    print "Usage: " + path + " " + usage
+    explanation = (
+                "Filter the repositories from file '-in' and write "
+                "filtered repositories to '-out'. '-f/--filter' specifies "
+                "the filter criterion. Currently supported: stars==5, stars=>2 "
+                "stars=<5, stars=>2 <10 etc."   
+                )
+    # Filter repositories: filter -in file -out file -f/--filter filter_arg
+    parser.addArgumentsCombination(ARGS_EXTRACTREPOS_FILTERED,
+                                   [
+                                ["in=", None], 
+                                ["out=", None], 
+                                ["f=", "filter"]
+                                ],
+                                   explanation=explanation)
 
 if __name__ == '__main__':
     main(sys.argv)

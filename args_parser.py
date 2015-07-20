@@ -5,64 +5,36 @@ Created on Jul 19, 2015
 '''
 
 import re
-import sys
-from itertools import izip
 
-class ArgsParser(object):
+class ModeArgsParser(object):
     '''
     classdocs
     '''
 
     KEY_MODE  = "mode"
     KEY_ORDER = "order"
+    KEY_EXPLANATION = "key_explanation"
     KEY_ARGS_OPTIONAL  = "optional_args"
     KEY_ARGS_NECESSARY = "necessary_args"
     KEY_ARGS_OPTIONAL_WVAL  = "optional_args_w_value"
     KEY_ARGS_NECESSARY_WVAL = "necessary_args_w_value"
 
-    ARGS_RATELIMIT   = "ratelimit"
-    ARGS_CRAWL_REPOS = "crawl"
-    ARGS_EXTRACT_KEYDATA = "extract"
-    ARGS_EXTRACTREPOS_FILTERED = "filter"
-    
     def __init__(self):
         '''
         Constructor
         '''
         self.combinations = {}
-        
-        # Setup argument combinations.
-        # Each combination has its own dictionary.
-        
-        # Ratelimit: ratelimit
-        self.addArgumentsCombination(self.ARGS_RATELIMIT)
-        
-        # Crawl repos: crawl -in file -out file (-s/--skip)
-        self.addArgumentsCombination(self.ARGS_CRAWL_REPOS, [
-                                                        ["in=", None]
-                                                        ], [["ds", "dontskip"],])
-
-        # Extract key data: extract -in file -out file (-k/--key)
-        self.addArgumentsCombination(self.ARGS_EXTRACT_KEYDATA, [
-                                                        ["in=", None], 
-                                                        ["out=", None]
-                                                        ], [["k=", "key"]])
-        
-        # Extract key data: extract -in file -out file (-k/--key)
-        self.addArgumentsCombination(self.ARGS_EXTRACTREPOS_FILTERED, [
-                                                ["in=", None], 
-                                                ["out=", None], 
-                                                ["f=", "filter"]
-                                                ])
     
     def addArgumentsCombination(self, mode, necessary_args=None, 
-                                optional_args=None, order=None):
+                                optional_args=None, order=None,
+                                explanation=None):
         """
         Prepare a dictionary of necessary and optional values,
         with and without values respectively.
         """
         self.combinations[mode] = {
                 self.KEY_ORDER: [],
+                self.KEY_EXPLANATION: None,
                 self.KEY_ARGS_OPTIONAL:  [],
                 self.KEY_ARGS_NECESSARY: [],
                 self.KEY_ARGS_OPTIONAL_WVAL:  [],
@@ -147,30 +119,39 @@ class ArgsParser(object):
                         self.combinations[mode][self.KEY_ORDER].append(
                                                                 s_arg
                                                                 )
-                
-    def parseArgs(self, args):
-        # Expects args[0] to be a mode value, 
-        # i.e. it should not have a minus sign in front of it.
-        if args[0].strip()[0] == "-":
-            raise WrongFormatException(args[0])
         
-        # Parse mode:
-        if args[0] == self.ARGS_RATELIMIT:
-            # No options needed - skip them.
-            return self.getOpts(self.ARGS_RATELIMIT, args[1:])
-            
-        elif args[0] == self.ARGS_CRAWL_REPOS:
-            # Options: -in=value -out=value (-s, --skip)
-            return self.getOpts(self.ARGS_CRAWL_REPOS, args[1:])
+        if explanation:
+            self.combinations[mode][self.KEY_EXPLANATION] = explanation
+    
+    def parseMode(self, arg):
+        """
+        Check if mode ('arg') is implemented.
+        """
+        mode = None
+        arg = arg.strip()
         
-        elif args[0] == self.ARGS_EXTRACT_KEYDATA:
-            return self.getOpts(self.ARGS_EXTRACT_KEYDATA, args[1:])
-        
-        elif args[0] == self.ARGS_EXTRACTREPOS_FILTERED:
-            return self.getOpts(self.ARGS_EXTRACTREPOS_FILTERED, args[1:])
+        if arg[0] == "-":
+            raise WrongFormatException(arg)
         
         else:
-            raise WrongModeException(args[0])
+            # Check if this mode is available.
+            for key in self.combinations:
+                if key == arg:
+                    mode = arg
+                    break
+        
+        if mode:
+            return mode
+        
+        else:
+            raise WrongModeException(arg)
+        
+    
+    def parseArgs(self, mode, args):
+        # Expects args[0] to be a mode value, 
+        # i.e. it should not have a minus sign in front of it.
+        mode = self.parseMode(mode)
+        return self.getOpts(mode, args)
         
     def getOpts(self, mode, args):
         """
@@ -180,14 +161,11 @@ class ArgsParser(object):
         # Therefore, look for long options first, then for short options.
         re_long_option  = re.compile("--([a-zA-Z]+)")
         re_short_option = re.compile("-([a-zA-Z]+)")
-#         re_long_option_val  = re.compile("--([a-zA-Z]+)(?:[\s=]([^-]+))")
-#         re_short_option_val = re.compile("-([a-zA-Z]+)(?:[\s=]([^-]+))")
         
         result = {}
         skip   = False
         parsed_vals = []
         
-#         combination = self.combinations[mode]
         for i, _ in enumerate(args):
             if not skip:
                 key      = None
@@ -359,7 +337,83 @@ class ArgsParser(object):
             raise WrongParameterException(mode, orig_key)
         
         return found_permitted_arg
-    
+
+    def printHelp(self, arg0):
+        """
+        Print usage.
+        """
+        # Construct usage string
+        usage = (
+            "Usage: python " + str(arg0) + " MODE necessary_arg0, necessary_arg1"
+            ", .. optional_arg0, optional_arg1, ...\n"
+            )
+        
+        # Print all modes.
+        modes = "\nMODES: "
+        for key in self.combinations:
+            modes += str(key) + ", "
+            
+        modes = modes[:-2] + "\n"
+        
+        args = "\nMODE ARGS [OPTIONAL_ARGS]:\n"
+        
+        
+        # Construct mode-argument combination-strings.
+        for mode in self.combinations:
+            counter = 0
+            arg = "\t" + mode + "\t\t"
+            for key in self.combinations[mode][self.KEY_ARGS_NECESSARY_WVAL]:
+                arg += "-" + str(key[0])
+                if key[1]:
+                    arg += "/--" + str(key[1]) 
+
+                arg += " arg" + str(counter) + " "
+                counter += 1
+            
+            for key in self.combinations[mode][self.KEY_ARGS_NECESSARY]:
+                arg += "-" + str(key[0])
+                if key[1]:
+                    arg += "/--" + str(key[1]) + " "
+            
+            if (
+            self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
+            self.combinations[mode][self.KEY_ARGS_OPTIONAL]
+            ):
+                arg += "["
+            
+            for key in self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL]:
+                arg += "-" + str(key[0])
+                if key[1]:
+                    arg += "/--" + str(key[1])
+
+                arg += " arg" + str(counter) + " "
+                counter += 1
+            
+            for key in self.combinations[mode][self.KEY_ARGS_OPTIONAL]:
+                arg += "-" + str(key[0])
+                if key[1]:
+                    arg += "/--" + str(key[1]) + " "
+            
+            if (
+            self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
+            self.combinations[mode][self.KEY_ARGS_OPTIONAL]
+            ):
+                arg = arg[:-1] + "]"
+                
+            args += arg + "\n"
+            
+        # Also print explanations for each mode.
+        explanations = "\nDESCRIPTION:\n"
+        tabulator    = "\t"
+        for key in self.combinations:
+            if self.combinations[key][self.KEY_EXPLANATION]:
+                explanation = "Mode: " + str(key) + "\n" + tabulator
+                explanation += self.combinations[key][self.KEY_EXPLANATION]
+                
+                explanations += explanation + "\n\n"
+                
+        print (usage + modes + args + explanations),
+
 class WrongModeException(BaseException):
     def __init__(self, val=None):
         self.val = val
