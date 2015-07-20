@@ -3,3 +3,4 @@ convert.py*
 .fuse*
 crawled/
 backups/
+authentication
