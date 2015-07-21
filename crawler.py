@@ -16,7 +16,7 @@ from github.repository_list import RepositoryList
 from github.exceptions import RatelimitExceededException
 from github.repository import Repository
 import signal
-import getpass
+from github.oauthManager import *
 
 class Crawler(object):
     '''
@@ -24,9 +24,6 @@ class Crawler(object):
     '''
 
     # constants
-    OAUTH = None
-#     "71cc84f627fd38b6d7a2e2ba7daf6792578982d9"
-    
     FILE_AUTHENTICATION = "authentication"
     
     LINK_API   = "https://api.github.com"
@@ -64,20 +61,31 @@ class Crawler(object):
         '''
         Constructor
         '''
-        # Parse authentication data.
+        # Get OAuth from file 'authentication'.
+        auth_file    = "authentication"
+        auth_manager = OAuthManager(filename=auth_file)
+        auth = None
         try:
-            self.parseAuthentication()
-        
+            auth = auth_manager.getAuthData()
+            
         except (AuthFileNotFoundException, AuthException):
             # Authentication file not found or malformatted. Recreate it.
             try:
-                self.createAuth()
-                self.parseAuthentication()
+                auth_manager.createAuth()
+                auth = auth_manager.getAuthData()
                 print "Authentication process done. Continuing..."
             except OAuthCreationException:
             # OAuth error. Maybe the OAuth token could not be created, because
             # it already exists.
                 sys.exit()
+                
+        self.OAUTH = auth[auth_manager.KEY_OAUTH]
+        self.HEADER_USER_AGENT = auth[auth_manager.KEY_USER_AGENT]
+        
+        self.HEADERS = {
+                    'User-Agent':    self.HEADER_USER_AGENT,
+                    'Authorization': "token %s" % self.OAUTH,
+                    }
         
         # Setup authentication and settings
         self.s = GithubSession(self.OAUTH, self.HEADER_USER_AGENT)
@@ -561,144 +569,6 @@ class Crawler(object):
     
         return url
     
-    def parseAuthentication(self):
-        try:
-            with open (self.FILE_AUTHENTICATION, 'r') as fh:
-                # Parse first line, should be OAuth token.
-                self.OAUTH = fh.readline().strip()
-                # Parse second line, should be user agent.
-                self.HEADER_USER_AGENT = fh.readline().strip()
-                
-                if self.OAUTH == "" or self.HEADER_USER_AGENT == "":
-                    raise AuthException()
-                
-                self.HEADERS = {
-                    'User-Agent':    self.HEADER_USER_AGENT,
-                    'Authorization': "token %s" % self.OAUTH,
-                    }
-                
-        except IOError:
-            raise AuthFileNotFoundException()
-        
-    def createAuth(self):
-        print (
-            "Authentication file not found! This is probably your first use.\n"
-            "We need to install an OAuth token for this crawler to work.\n"
-            "You can create one manually on https://github.com/settings/tokens\n"
-            "or let me create one for you. However, you will need to specify\n"
-            "your github username and password once. It will not be remembered "
-            "or transfered somewhere else than github."
-            )
-        
-        manual_oauth = False
-        user_input   = self.getValidUserInput(
-                                    "Do you want to enter one manually? [y/N]", 
-                                    ["y", "Y", "N", "n"], 
-                                    default="N"
-                                    )
-        
-        if user_input.lower() == "y" :
-            manual_oauth = True
-        
-        oauth = None
-        if manual_oauth:
-            oauth = raw_input("Please enter your OAuth token:")
-        
-        else:
-            print (
-                "Alright, let's create an OAuth token for your "
-                "Github account and this application!"
-                )
-            
-            self.createOAuthUntilSuccess()
-            
-            username = raw_input("Please enter your Github email: ")
-            password = getpass.getpass("Please enter your Github password: ")
-            
-            oauth = self.createOAuth(username, password)
-
-            with open(self.FILE_AUTHENTICATION, 'w') as fh:
-                fh.write(oauth.strip()    + "\n")
-                fh.write(username.strip() + "\n")
-    
-    def createOAuthUntilSuccess(self):
-        username = raw_input("Please enter your Github email: ")
-        password = getpass.getpass("Please enter your Github password: ")
-            
-        oauth = self.createOAuth(username, password)
-            
-        return oauth
-    
-    def createOAuth(self, username, password):
-        url = "https://api.github.com/authorizations"
-            
-        payload = {
-                "scopes": [
-                        "public_repo"
-                        ],
-                "note": "githubSpider token."
-                }
-        
-        resp = r.post(url,
-                     auth=(username, password),
-                     data=json.dumps(payload))
-        
-        oauth = None
-        if resp.status_code == 201:
-            # Success.
-            print (
-                "OAuth successfully created in file 'authentication'.\n"
-                "Remember: Do not transfer your OAuth token to anybody!"
-                )
-            decoded = json.loads(resp.text)
-            oauth = decoded["token"]
-            
-        elif resp.status_code == 422:
-            # OAuth already exists.
-            print (
-                "Error: OAuth already exists for this application.\n"
-                "Visit https://github.com/settings/tokens and delete\n"
-                "the githubSpider token. Then, please try again."
-                )
-            
-            raise OAuthCreationException()
-        
-        elif resp.status_code == 401:
-            # Bad credentials
-            print (
-                "Error: Bad credentials, try again."
-                )
-            self.createOAuthUntilSuccess()
-        
-        print resp.status_code, resp.text
-            
-        return oauth
-    
-    def getValidUserInput(self, msg, valid_answers, default=None):
-        """
-        Ask user to input data until he entered a valid input.
-        If 'default' is given, it will be returned on no user input (=user 
-        just input "\n").
-        """
-        if default:
-            valid_answers.append("")
-            
-        user_input = raw_input(msg)
-        while not self.isValidUserInput(user_input, valid_answers):
-            user_input = raw_input(msg)
-        
-        if user_input == "" and default:
-            user_input = default
-        
-        return user_input
-        
-    def isValidUserInput(self, user_input, valid_answers):
-        for answer in valid_answers:
-            if user_input == answer:
-                return True
-            
-        return False
-    
     ### LEGACY CODE
     ### ~~~~~~~~~~~
     def crawlSearchDays(self, start, end, q="langauge:PHP", sort=None, order=None):
@@ -741,16 +611,3 @@ class Crawler(object):
             # the load on the GitHub API servers.
             if not resp["items"]:
                 break
-            
-### Exceptions
-class AuthException():
-    def __str__(self):
-        return "No allowed authentication found in file 'authentication'."
-    
-class AuthFileNotFoundException():
-    def __str__(self):
-        return "Authentication file not found. Expecting file 'authentication'."
-    
-class OAuthCreationException():
-    def __str__(self):
-        return "Failed to create OAuth token."
