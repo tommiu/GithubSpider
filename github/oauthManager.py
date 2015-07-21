@@ -50,6 +50,7 @@ class OAuthManager(object):
         print (
             "Authentication file not found! This is probably your first use.\n"
             "We need to install an OAuth token for this crawler to work.\n"
+            "This token does not need ANY access to your Github account.\n"
             "You can create one manually on https://github.com/settings/tokens\n"
             "or let me create one for you. However, you will need to specify\n"
             "your github username and password once. It will not be remembered "
@@ -66,10 +67,11 @@ class OAuthManager(object):
         if user_input.lower() == "y" :
             manual_oauth = True
         
-        oauth = None
+        oauth    = None
+        username = None
         if manual_oauth:
-            oauth = raw_input("Please enter your OAuth token:")
-        
+            oauth    = raw_input("Please enter your OAuth token: ").strip()
+            username = raw_input("Please enter your Github email: ").strip()
         else:
             print (
                 "Alright, let's create an OAuth token for your "
@@ -78,13 +80,11 @@ class OAuthManager(object):
             
             oauth, username = self.createOAuthUntilSuccess()
 
-            print "so, mal testen:", oauth, username, self.FILE
-
             with open(self.FILE, 'w') as fh:
                 fh.write(oauth.strip()    + "\n")
                 fh.write(username.strip() + "\n")
                 
-            self.setAuth(oauth, username)
+        self.setAuth(oauth, username)
     
     def createOAuthUntilSuccess(self):
         """
@@ -108,9 +108,7 @@ class OAuthManager(object):
         url = "https://api.github.com/authorizations"
 
         payload = {
-                "scopes": [
-#                         "public_repo"
-                        ],
+                "scopes": [],
                 "note": "githubSpider token."
                 }
         
@@ -120,7 +118,6 @@ class OAuthManager(object):
                       headers=header)
 
         oauth = self.processOAuthResponse(resp, username, password)
-        print "oauthaha", oauth
         
         return oauth
     
@@ -143,7 +140,7 @@ class OAuthManager(object):
                 "Visit https://github.com/settings/tokens and delete\n"
                 "the githubSpider token. Then, please try again."
                 )
-            
+
         elif resp.status_code == 401:
             # Bad credentials or two-factor authentication.
             # Check for two-factor authentication header: 
@@ -193,8 +190,6 @@ class OAuthManager(object):
             
         if not oauth:
             raise OAuthCreationException()
-        
-#         print resp.status_code, resp.text
         
         return oauth
     
