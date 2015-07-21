@@ -4,9 +4,7 @@ Created on Jul 4, 2015
 @author: Tommi Unruh
 '''
 
-import requests as r
 import sys
-import json
 import re
 import os
 import shutil
@@ -14,7 +12,6 @@ import shutil
 from github.session import Session as GithubSession
 from github.repository_list import RepositoryList
 from github.exceptions import RatelimitExceededException
-from github.repository import Repository
 import signal
 from github.oauthManager import *
 

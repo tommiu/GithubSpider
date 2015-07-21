@@ -3,8 +3,6 @@ Created on Jul 18, 2015
 
 @author: Tommi Unruh
 '''
-from Crypto.Util.RFC1751 import _key2bin
-
 class RatelimitExceededException(BaseException):
     def __str__(self):
         return "Your ratelimit is exceeded!"

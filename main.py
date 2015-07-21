@@ -6,7 +6,6 @@ Created on Jul 4, 2015
 
 from crawler import Crawler
 import sys
-import getopt
 from args_parser import ModeArgsParser
 
 USAGE_ARGS = [
