@@ -40,10 +40,16 @@ def main(argv):
     # Setup command line arguments.
     parser = ModeArgsParser()
     setupArgs(parser)
+    
     crawler = Crawler()
-    
-    flow = parser.parseArgs(argv[1], argv[2:])
-    
+    flow    = None
+    try:
+        flow = parser.parseArgs(argv[1], argv[2:])
+        
+    except:
+        parser.printHelp(argv[0])
+        sys.exit()
+        
     if flow[0] == ARGS_HELP:
         parser.printHelp(argv[0])
     
