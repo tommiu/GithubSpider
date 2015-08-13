@@ -67,17 +67,18 @@ class Crawler(object):
             
         except (AuthFileNotFoundException, AuthException):
             # Authentication file not found or malformatted. Recreate it.
-            try:
-                auth_manager.createAuth()
-                auth = auth_manager.getAuthData()
-                print "Authentication process done. Continuing..."
-            except OAuthCreationException:
-            # OAuth error. Maybe the OAuth token could not be created, because
-            # it already exists.
-                sys.exit()
+            auth = self.initiateAuthCreation(auth_manager)
+              
+        except NoCredentialsException:
+            oauth      = None
+            user_agent = None
                 
-        self.OAUTH = auth[auth_manager.KEY_OAUTH]
-        self.HEADER_USER_AGENT = auth[auth_manager.KEY_USER_AGENT]
+        if auth:
+            oauth       = auth[auth_manager.KEY_OAUTH]
+            user_agent  = auth[auth_manager.KEY_USER_AGENT]
+    
+        self.OAUTH = oauth
+        self.HEADER_USER_AGENT = user_agent
         
         self.HEADERS = {
                     'User-Agent':    self.HEADER_USER_AGENT,
@@ -86,7 +87,24 @@ class Crawler(object):
         
         # Setup authentication and settings
         self.s = GithubSession(self.OAUTH, self.HEADER_USER_AGENT)
-    
+        
+    def initiateAuthCreation(self, auth_manager):
+        try:
+            auth_manager.createAuth()
+            auth = auth_manager.getAuthData()
+            print "Authentication process done. Continuing..."
+            
+        except OAuthCreationException:
+            # OAuth error. Maybe the OAuth token could not be created, because
+            # it already exists.
+            print (
+                "OAuth error. Maybe authentication file could not be written "
+                "because of missing write-privilege."
+                )
+            sys.exit()
+        
+        return auth
+        
     def crawlReposWUpdate(self, data_filename):
         self.crawlRepos(data_filename, skip=False)
     
