@@ -27,10 +27,12 @@ class Session(object):
     
     STATUS_UNAVAILABLE = 403
 
-    def __init__(self, OAuth, user_agent):
+    def __init__(self, OAuth=None, user_agent=None):
         """
         Setup session.
         """
+        self.HEADERS = {}
+        
         if OAuth and user_agent:
             self.setOAuth(OAuth)
             self.setUserAgent(user_agent)
@@ -40,8 +42,12 @@ class Session(object):
                 'Authorization': "token %s" % OAuth
             }
 
-        else:
-            raise ValueError("OAuth or UserAgent could not be set.")
+        elif not OAuth:
+            print (
+                "No authorization token given, continuing unauthenticated.\n"
+                "Unauthenticated requests are limited to 60 per hour, while\n"
+                "authenticated requests are limited to 5000 per hour."
+                )
     
     def getRatelimit(self):
         """

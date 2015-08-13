@@ -7,6 +7,7 @@ Created on Jul 21, 2015
 import requests as r
 import getpass
 import json
+import os
 
 class OAuthManager(object):
     """
@@ -69,6 +70,7 @@ class OAuthManager(object):
         
         oauth    = None
         username = None
+        
         if manual_oauth:
             oauth    = raw_input("Please enter your OAuth token: ").strip()
             username = raw_input("Please enter your Github email: ").strip()
@@ -80,10 +82,16 @@ class OAuthManager(object):
             
             oauth, username = self.createOAuthUntilSuccess()
 
-            with open(self.FILE, 'w') as fh:
-                fh.write(oauth.strip()    + "\n")
-                fh.write(username.strip() + "\n")
-                
+        with open(self.FILE, 'w') as fh:
+            fh.write(oauth.strip()    + "\n")
+            fh.write(username.strip() + "\n")
+        
+        print (
+            "OAuth file \"authentication\" successfully written!\n"
+            "Future executions will automatically read your authentication data"
+            " from that file."
+            )
+        
         self.setAuth(oauth, username)
     
     def createOAuthUntilSuccess(self):
@@ -219,10 +227,49 @@ class OAuthManager(object):
         return False
     
     def setAuth(self, oauth, user_agent):
+        self.testAuth(oauth)
+        
         self.AUTH = {
                 self.KEY_OAUTH: oauth,
                 self.KEY_USER_AGENT: user_agent
                 }
+        
+    def testAuth(self, oauth_token):
+        url    = "https://api.github.com"
+        header = {
+                "Authorization": "token %s" % (oauth_token)  
+                }
+        
+        resp = r.get(url,
+                      headers=header)
+        
+        if resp.status_code != 200:
+            print (
+                "Found bad credentials in authentication "
+                "file 'authentication'."
+                )
+            
+            user_input = self.getValidUserInput(
+                                    "Do you want to delete it? [Y/n]", 
+                                    ["y", "Y", "N", "n"], 
+                                    default="Y"
+                                    )
+            
+            if user_input.lower() == "y":
+                msg = "Deleting authentication file..."
+                print "%s\r" % (msg), 
+                
+                os.remove(self.FILE)
+        
+                print "%s Done." % (msg)
+                
+                raise AuthException()
+            
+            else:
+                print "You chose to not delete the authentication data."
+                
+                raise NoCredentialsException()
+
         
 ### Exceptions
 class AuthException(BaseException):
@@ -243,3 +290,7 @@ class NoAuthException(BaseException):
             "No OAuth or user agent available. "
             "Did you specify or parse them before?"
             )
+        
+class NoCredentialsException(BaseException):
+    def __str__(self):
+        return "No credentials given."
