@@ -116,6 +116,9 @@ class Crawler(object):
                 Inner function: Restore original file from backup upon 
                 termination in backup process.
                 """
+                msg = "Got exit signal. Restoring original file from backup..."
+                print "\n%s\r" % (msg), 
+                
                 if fw:
                     fw.close()
 
@@ -124,6 +127,10 @@ class Crawler(object):
 
                 # Copy backup file back.
                 shutil.copyfile(file_links_backup, file_links)
+                
+                print "%s Done." % (msg)
+                
+                sys.exit()
             
             # Catch process-kill signal.
             signal.signal(signal.SIGTERM, restoreBackup)
@@ -192,18 +199,11 @@ class Crawler(object):
                         # -> The link file can get huge and this way, we 
                         # do not spam the memory with large lists of data.
                         counter = 0
-                        
+
                         repos = RepositoryList(
                                     url, etag, repos=l.strip(),
                                     next_url=next_url
                                     )
-                        
-                        # We are done with parsing a single block of data,
-                        # use this information to crawl data and see,
-                        # if GitHub answers with new or old data.
-                        # -> The link file can get huge and this way, we 
-                        # do not spam the memory with large lists of data.
-                        counter = 0
 
                         if not skip:
                             try:
@@ -220,7 +220,7 @@ class Crawler(object):
                 url = repos.getNextURL()
                 
             # Remove backup signal handlers.
-            # SIG_DFL is the standard signal for any signal handler.
+            # SIG_DFL is the standard signal handle for any signal.
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
             signal.signal(signal.SIGINT,  signal.SIG_DFL)
             print "Done parsing old data."
@@ -233,8 +233,8 @@ class Crawler(object):
         try:
             # Parsing finished or no backup file found. Start crawling new data.
             if not fw:
-                fw = open(file_links, 'a')
                 # There was no backup file
+				fw = open(file_links, 'a')
             
             if not url:
                 # We do not have a URL to start form yet.
@@ -252,7 +252,6 @@ class Crawler(object):
             
         except RatelimitExceededException:
             self.endExecution()
-    
 
     def nextBackupCrawl(self, fh, repository_list, copy_only=False):
         """
