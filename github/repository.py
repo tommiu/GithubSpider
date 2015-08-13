@@ -28,7 +28,7 @@ class Repository(object):
             raise Exception("Given value for '_dict' is not valid: '%s'." % (
                                                                     _dict
                                                                     ))
-    
+
     def filter(self, _filter):
         """
         If all key,values match, return True. False otherwise.
@@ -42,7 +42,6 @@ class Repository(object):
                 return False
             
         return True
-    
     
     def __str__(self):
         return json.dumps(self._dict)

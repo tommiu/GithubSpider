@@ -39,7 +39,7 @@ class Session(object):
                 'User-Agent':    user_agent,
                 'Authorization': "token %s" % OAuth
             }
-            
+
         else:
             raise ValueError("OAuth or UserAgent could not be set.")
     
@@ -57,7 +57,7 @@ class Session(object):
                             ":\n%s" % _dict)
             
         return _dict
-    
+
     def getRepos(self, since=0, url=None):
         """
         Get a list of repositories.
