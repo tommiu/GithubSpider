@@ -14,6 +14,7 @@ from github.repository_list import RepositoryList
 from github.exceptions import RatelimitExceededException
 import signal
 from github.oauthManager import *
+import errno
 
 class Crawler(object):
     '''
@@ -178,7 +179,9 @@ class Crawler(object):
                 # We do not want to recrawl old data.
                 # Therefore, get the last next-link from the old data,
                 # so that we can continue crawling from there.
-                old_data  = f_links.readlines()[-4:]
+#                 old_data  = f_links.readlines()[-4:]
+#                 f_links.close()
+                old_data = self.getDataLikeTail(file_links, 4)
 
             else:
                 old_data = f_links
@@ -252,7 +255,7 @@ class Crawler(object):
             # Parsing finished or no backup file found. Start crawling new data.
             if not fw:
                 # There was no backup file
-				fw = open(file_links, 'a')
+                fw = open(file_links, 'a')
             
             if not url:
                 # We do not have a URL to start form yet.
@@ -270,6 +273,56 @@ class Crawler(object):
             
         except RatelimitExceededException:
             self.endExecution()
+
+    def getDataLikeTail(self, filename, count):
+        """
+        Efficient way to read the last lines of a huge file.
+        """
+        sep = "\n"
+        stepsize = 2048
+        
+        with open(filename, 'rb') as fh:
+            # Go to end of file.
+            pos = 0
+            linecount = 0
+            fh.seek(0, os.SEEK_END)
+            
+            while linecount <= count + 1:
+                try:
+                    # Go backwards in file.
+                    fh.seek(-stepsize, os.SEEK_CUR)
+                    
+                    # Count found newlines.
+                    linecount += fh.read(stepsize).count(sep)
+    
+                    # We just went forwards, so go back again.
+                    fh.seek(-stepsize, os.SEEK_CUR)
+
+                except IOError as e:
+                    if e.errno == errno.EINVAL:
+                        # Attempted to seek past the start while stepping back.
+                        stepsize = fh.tell()
+                        fh.seek(0, os.SEEK_SET)
+                        
+                        # Read from beginning.
+                        linecount += fh.read(stepsize).count(sep)
+                        break
+
+                pos = fh.tell()
+                
+        # Now read data.
+        with open(filename, 'r') as fh:
+            fh.seek(pos, os.SEEK_SET)
+            
+            for line in fh:
+                # We found n (or even more) lines, 
+                # so we could need to skip some lines.
+                if linecount > count:
+                    linecount -= 1
+                    continue
+                
+                # Otherwise return data.
+                yield line
 
     def nextBackupCrawl(self, fh, repository_list, copy_only=False):
         """
