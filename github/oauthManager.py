@@ -240,8 +240,7 @@ class OAuthManager(object):
                 "Authorization": "token %s" % (oauth_token)  
                 }
         
-        resp = r.get(url,
-                      headers=header)
+        resp = r.get(url, headers=header)
         
         if resp.status_code != 200:
             print (
