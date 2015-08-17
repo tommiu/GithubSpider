@@ -8,24 +8,6 @@ from crawler import Crawler
 import sys
 from args_parser import ModeArgsParser
 
-USAGE_ARGS = [
-        ("ratelimit", "", "Show current rate limit"),
-        ("links\t"    , "", "Crawl repository cloning links."),
-#         ("-w", "--write", "Activate the custom logging function.\n"
-#         "\t\t\t\tIf you do not specify your own custom logger, then the standard\n"
-#         "\t\t\t\tcustom logger will be used. It creates HTML pages from the\n"
-#         "\t\t\t\tvulnerability scanning results."),
-        ("-q", "--query"  , "Specify a GitHub search query for the link " 
-         "crawling.\n\t\t\t\tThe default value is \"language:PHP\""),
-        ("-d", "--days", "(Necessary for 'crawlDays' command.)\n"
-         "\t\t\t\tSpecify a start and end date for the link "
-         "crawling\n\t\t\t\twhich respects the creation day of repositories.\n"
-         "\t\t\t\tThe search query will be repeated for every day in [start, end].\n"
-         "\t\t\t\tExample: -d '2015-05-15,2015-05-20' will\n"
-         "\t\t\t\ttrigger search queries for five days."),
-        ("-h", "--help"  , "Print this help."),
-        ]
-
 ARGS_HELP = "help"
 ARGS_RATELIMIT   = "ratelimit"
 ARGS_CRAWL_REPOS = "crawl"
@@ -37,43 +19,66 @@ def main(argv):
     Entry point of execution. Handles program arguments and
     acts accordingly. 
     """
+    auth_file = "authentication"
+    
     # Setup command line arguments.
     parser = ModeArgsParser()
     setupArgs(parser)
     
-    crawler = Crawler()
     flow    = None
+    crawler = None
+
     try:
         flow = parser.parseArgs(argv[1], argv[2:])
+        
+        # Check if authentication file was specified.
+        if "a" in flow:
+            auth_file = flow["a"]
+        elif "auth" in flow:
+            auth_file = flow["auth"]
+            
+        crawler = Crawler(auth_file)
         
     except:
         parser.printHelp(argv[0])
         sys.exit()
         
-    if flow[0] == ARGS_HELP:
+    if flow[parser.KEY_MODE] == ARGS_HELP:
         parser.printHelp(argv[0])
     
-    if flow[0] == ARGS_RATELIMIT:
+    if flow[parser.KEY_MODE] == ARGS_RATELIMIT:
         _dict = crawler.getRateLimit()
         print "Rate Limits:"
         print "core:"  , _dict["core"]
         print "search:", _dict["search"]
 
-    elif flow[0] == ARGS_CRAWL_REPOS:
-            if len(flow[1:]) == 2:
-                crawler.crawlRepos(flow[1], skip=False)
+    elif flow[parser.KEY_MODE] == ARGS_CRAWL_REPOS:
+            if "ds" in flow or "dontskip" in flow:
+                skip = False
             else:
-                crawler.crawlRepos(flow[1])
+                skip = True
+            
+            crawler.crawlRepos(flow["in"], skip)
                 
-    elif flow[0] == ARGS_EXTRACT_KEYDATA:
-        if len(flow[1:]) == 3:
-            crawler.getKeyFromCrawlData(flow[1], flow[2], flow[3])
+    elif flow[parser.KEY_MODE] == ARGS_EXTRACT_KEYDATA:
+        if "k" in flow or "key" in flow:
+            try:
+                key = flow["k"]
+            except:
+                key = flow["key"]
+            finally:
+                crawler.getKeyFromCrawlData(flow["in"], flow["out"], key)
+            
         else:
-            crawler.getKeyFromCrawlData(flow[1], flow[2])
+            crawler.getKeyFromCrawlData(flow["in"], flow["out"])
     
-    elif flow[0] == ARGS_EXTRACTREPOS_FILTERED:
-        if len(flow[1:]) == 3:
-            crawler.extractReposFiltered(flow[1], flow[2], flow[3])
+    elif flow[parser.KEY_MODE] == ARGS_EXTRACTREPOS_FILTERED:
+        try:
+            _filter = flow["f"]
+        except:
+            _filter = flow["filter"]
+        finally:
+            crawler.extractReposFiltered(flow["in"], flow["out"], _filter)
 
 def setupArgs(parser):
     """
@@ -96,8 +101,9 @@ def setupArgs(parser):
                 "The input file will be renamed to input_file_backup."
                 )
     parser.addArgumentsCombination(
-                                ARGS_CRAWL_REPOS, [["in=", None]],
-                                [["ds", "dontskip"],],
+                                ARGS_CRAWL_REPOS,
+                                [["in=", None]],
+                                [["ds", "dontskip"], ["a=", "auth"]],
                                 explanation=explanation
                                 )
     

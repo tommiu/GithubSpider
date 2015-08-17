@@ -164,7 +164,7 @@ class ModeArgsParser(object):
         
         result = {}
         skip   = False
-        parsed_vals = []
+        parsed_vals = {}
         
         for i, _ in enumerate(args):
             if not skip:
@@ -202,18 +202,19 @@ class ModeArgsParser(object):
                     
             else:
                 skip = False
-        
+
         # Are necessary arguments still missing?
         if self.isMissingArgs(self.combinations[mode]):
             raise MissingParameterException(self.combinations[mode])
         
         # Add mode to result
-        parsed_vals.append(mode)
+        parsed_vals[self.KEY_MODE] = mode
         
         # Bring arguments in order.
-        for elem in self.combinations[mode][self.KEY_ORDER]:
-            if elem in result:
-                parsed_vals.append(result[elem])
+#         for elem in self.combinations[mode][self.KEY_ORDER]:
+#             if elem in result:
+        for key in result:
+            parsed_vals[key] = result[key]
         
         return parsed_vals
     
@@ -362,7 +363,10 @@ class ModeArgsParser(object):
         for mode in self.combinations:
             counter = 0
             arg = "\t" + mode + "\t\t"
+            print "MODE", mode
             for key in self.combinations[mode][self.KEY_ARGS_NECESSARY_WVAL]:
+                
+                print "TEST", key
                 arg += "-" + str(key[0])
                 if key[1]:
                     arg += "/--" + str(key[1]) 

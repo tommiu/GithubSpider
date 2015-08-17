@@ -55,12 +55,12 @@ class Crawler(object):
     # GitHub Session object
     s = None
     
-    def __init__(self):
+    def __init__(self, file_path):
         '''
         Constructor
         '''
         # Get OAuth from file 'authentication'.
-        auth_file    = "authentication"
+        auth_file    = file_path
         auth_manager = OAuthManager(filename=auth_file)
         auth = None
         try:
