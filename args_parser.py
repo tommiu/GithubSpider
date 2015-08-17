@@ -5,6 +5,7 @@ Created on Jul 19, 2015
 '''
 
 import re
+import copy
 
 class ModeArgsParser(object):
     '''
@@ -24,6 +25,7 @@ class ModeArgsParser(object):
         Constructor
         '''
         self.combinations = {}
+        
     
     def addArgumentsCombination(self, mode, necessary_args=None, 
                                 optional_args=None, order=None,
@@ -122,6 +124,10 @@ class ModeArgsParser(object):
         
         if explanation:
             self.combinations[mode][self.KEY_EXPLANATION] = explanation
+            
+        # Create a duplicate of combinations as a helper variable.
+        # It is necessary to construct the usage() message.
+        self.combinations_helper = copy.deepcopy(self.combinations)
     
     def parseMode(self, arg):
         """
@@ -351,7 +357,7 @@ class ModeArgsParser(object):
         
         # Print all modes.
         modes = "\nMODES: "
-        for key in self.combinations:
+        for key in self.combinations_helper:
             modes += str(key) + ", "
             
         modes = modes[:-2] + "\n"
@@ -360,11 +366,11 @@ class ModeArgsParser(object):
         
         
         # Construct mode-argument combination-strings.
-        for mode in self.combinations:
+        for mode in self.combinations_helper:
             counter = 0
             arg = "\t" + mode + "\t\t"
             print "MODE", mode
-            for key in self.combinations[mode][self.KEY_ARGS_NECESSARY_WVAL]:
+            for key in self.combinations_helper[mode][self.KEY_ARGS_NECESSARY_WVAL]:
                 
                 print "TEST", key
                 arg += "-" + str(key[0])
@@ -374,18 +380,18 @@ class ModeArgsParser(object):
                 arg += " arg" + str(counter) + " "
                 counter += 1
             
-            for key in self.combinations[mode][self.KEY_ARGS_NECESSARY]:
+            for key in self.combinations_helper[mode][self.KEY_ARGS_NECESSARY]:
                 arg += "-" + str(key[0])
                 if key[1]:
                     arg += "/--" + str(key[1]) + " "
             
             if (
-            self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
-            self.combinations[mode][self.KEY_ARGS_OPTIONAL]
+            self.combinations_helper[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
+            self.combinations_helper[mode][self.KEY_ARGS_OPTIONAL]
             ):
                 arg += "["
             
-            for key in self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL]:
+            for key in self.combinations_helper[mode][self.KEY_ARGS_OPTIONAL_WVAL]:
                 arg += "-" + str(key[0])
                 if key[1]:
                     arg += "/--" + str(key[1])
@@ -393,14 +399,14 @@ class ModeArgsParser(object):
                 arg += " arg" + str(counter) + ", "
                 counter += 1
             
-            for key in self.combinations[mode][self.KEY_ARGS_OPTIONAL]:
+            for key in self.combinations_helper[mode][self.KEY_ARGS_OPTIONAL]:
                 arg += "-" + str(key[0])
                 if key[1]:
                     arg += "/--" + str(key[1]) + ", "
             
             if (
-            self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
-            self.combinations[mode][self.KEY_ARGS_OPTIONAL]
+            self.combinations_helper[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
+            self.combinations_helper[mode][self.KEY_ARGS_OPTIONAL]
             ):
                 arg = arg[:-2] + "]"
                 
@@ -409,10 +415,10 @@ class ModeArgsParser(object):
         # Also print explanations for each mode.
         explanations = "\nDESCRIPTION:\n"
         tabulator    = "\t"
-        for key in self.combinations:
-            if self.combinations[key][self.KEY_EXPLANATION]:
+        for key in self.combinations_helper:
+            if self.combinations_helper[key][self.KEY_EXPLANATION]:
                 explanation = "Mode: " + str(key) + "\n" + tabulator
-                explanation += self.combinations[key][self.KEY_EXPLANATION]
+                explanation += self.combinations_helper[key][self.KEY_EXPLANATION]
                 
                 explanations += explanation + "\n\n"
                 
