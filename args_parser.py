@@ -386,19 +386,19 @@ class ModeArgsParser(object):
                 if key[1]:
                     arg += "/--" + str(key[1])
 
-                arg += " arg" + str(counter) + " "
+                arg += " arg" + str(counter) + ", "
                 counter += 1
             
             for key in self.combinations[mode][self.KEY_ARGS_OPTIONAL]:
                 arg += "-" + str(key[0])
                 if key[1]:
-                    arg += "/--" + str(key[1]) + " "
+                    arg += "/--" + str(key[1]) + ", "
             
             if (
             self.combinations[mode][self.KEY_ARGS_OPTIONAL_WVAL] or
             self.combinations[mode][self.KEY_ARGS_OPTIONAL]
             ):
-                arg = arg[:-1] + "]"
+                arg = arg[:-2] + "]"
                 
             args += arg + "\n"
             
