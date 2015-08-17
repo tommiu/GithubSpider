@@ -192,6 +192,7 @@ class Crawler(object):
             
             # Parse old data.
             for l in old_data:
+                print l
                 counter += 1
                 
                 # Does the line start with '#', indicating a comment?
