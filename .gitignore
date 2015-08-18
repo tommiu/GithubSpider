@@ -4,3 +4,5 @@ convert.py*
 crawled/
 backups/
 authentication
+github_crawl.sh
+*~
