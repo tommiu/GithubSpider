@@ -8,6 +8,7 @@ import subprocess
 import os
 from time import sleep
 import sys
+import signal
 
 class GitDownloader(object):
     """
@@ -20,10 +21,31 @@ class GitDownloader(object):
             self.OUT_DIR += "/"
                 
     def cloneAllFromFile(self, filename, linenumber=0):
+        """
+        Clone repositories from links, that are read from 'filename', starting
+        at linenumber 'linenumber'.
+        """
         linenumber = int(linenumber)
+        
+        def catchInterrupt(signum, frame):
+            file_path = self.OUT_DIR + "cloning_interrupted"
+            print (
+                "Stopped at line '%d'. Also wrote the linenumber to "
+                "file '%s'."
+                ) % (linenumber, file_path)
+            
+            with open(file_path, 'w') as fh:
+                fh.write(str(linenumber))
+            
         with open(filename, 'r') as fh:
             if linenumber > 1:
                 self.goToLine(fh, linenumber)
+
+            # Catch process-kill signal.
+            signal.signal(signal.SIGTERM, catchInterrupt)
+            
+            # Also catch Ctrl-C/D.
+            signal.signal(signal.SIGINT,  catchInterrupt)
 
             l = fh.readline()
             while l:
@@ -42,22 +64,28 @@ class GitDownloader(object):
                 finally:
                     linenumber += 1
                     l = fh.readline()
-                    
+            
+            
+            # Remove backup signal handlers.
+            # SIG_DFL is the standard signal handle for any signal.
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            signal.signal(signal.SIGINT,  signal.SIG_DFL)
             print "End of file reached, my work is done!"
             
     def cloneRepoLink(self, link):
         msg     = "Cloning repository: %s..." % link
         out_dir = self.OUT_DIR + link[link.rfind("/") + 1 : -4]
 
-        print "%s\r" % msg,
+        print "%s" % msg,
         sys.stdout.flush()
         process = subprocess.Popen(["git", "clone", link, out_dir], 
                                    stdout=subprocess.PIPE, 
                                    stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         
-        if stderr:
-            print "%s Failed." % msg
+        if stderr != "" and stderr != "\n" :
+#             print "%s Failed." % msg
+            print "stderr:", stderr
             if "already exists and is not an empty directory." in stderr:
                 raise RepositoryExistsException(str(stderr))
             
