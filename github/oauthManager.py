@@ -235,7 +235,7 @@ class OAuthManager(object):
                 }
         
     def testAuth(self, oauth_token):
-        url    = "https://api.github.com"
+        url    = "https://api.github.com/rate_limit"
         header = {
                 "Authorization": "token %s" % (oauth_token)  
                 }
