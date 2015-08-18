@@ -47,7 +47,6 @@ def main(argv):
         elif "auth" in flow:
             auth_file = flow["auth"]
             
-        crawler = Crawler(auth_file)
         
     except:
         parser.printHelp(argv[0])
@@ -57,20 +56,25 @@ def main(argv):
         parser.printHelp(argv[0])
     
     if flow[parser.KEY_MODE] == ARGS_RATELIMIT:
+        crawler = Crawler(auth_file)
         _dict = crawler.getRateLimit()
         print "Rate Limits:"
         print "core:"  , _dict["core"]
         print "search:", _dict["search"]
 
     elif flow[parser.KEY_MODE] == ARGS_CRAWL_REPOS:
+            crawler = Crawler(auth_file)
+            
             if "ds" in flow or "dontskip" in flow:
                 skip = False
             else:
                 skip = True
-            
+                
             crawler.crawlRepos(flow["in"], skip)
                 
     elif flow[parser.KEY_MODE] == ARGS_EXTRACT_KEYDATA:
+        crawler = Crawler(auth_file)
+        
         if "k" in flow or "key" in flow:
             try:
                 key = flow["k"]
@@ -83,6 +87,8 @@ def main(argv):
             crawler.getKeyFromCrawlData(flow["in"], flow["out"])
     
     elif flow[parser.KEY_MODE] == ARGS_EXTRACTREPOS_FILTERED:
+        crawler = Crawler(auth_file)
+        
         try:
             _filter = flow["f"]
         except:
@@ -93,6 +99,7 @@ def main(argv):
     # cloning repos
     elif flow[parser.KEY_MODE] == ARGS_CLONE_REPOS:
         downloader = GitDownloader(flow["out"])
+        
         try:
             _line = flow["l"]
         except:
@@ -101,6 +108,16 @@ def main(argv):
             except:
                 _line = 0
         
+        try:
+            downloader.setSuccessHandler(flow["p"])
+            
+        except Exception as err:
+            print err
+            try:
+                downloader.setSuccessHandler(flow["plugin"])
+            except:
+                pass
+            
         try:
             downloader.cloneAllFromFile(flow["in"], _line)
             

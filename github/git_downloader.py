@@ -9,6 +9,7 @@ import os
 from time import sleep
 import sys
 import signal
+import imp
 
 class GitDownloader(object):
     """
@@ -19,6 +20,8 @@ class GitDownloader(object):
     
         if self.OUT_DIR[-1] != "/":
             self.OUT_DIR += "/"
+            
+        self.plugins = {} 
                 
     def cloneAllFromFile(self, filename, linenumber=0):
         """
@@ -84,8 +87,6 @@ class GitDownloader(object):
         stdout, stderr = process.communicate()
         
         if stderr != "" and stderr != "\n" :
-#             print "%s Failed." % msg
-            print "stderr:", stderr
             if "already exists and is not an empty directory." in stderr:
                 raise RepositoryExistsException(str(stderr))
             
@@ -96,6 +97,8 @@ class GitDownloader(object):
         
         if stdout:
             print stdout
+            
+        self.runSuccessHandler(out_dir)
     
     def goToLine(self, fh, linenumber):
         """
@@ -115,7 +118,32 @@ class GitDownloader(object):
                 # Empty string represents EOF.
                 raise OutOfScopeException(msg="goToLine error: ", 
                                           line=linenumber)
-            
+                
+    def setSuccessHandler(self, package_path):
+        """
+        Load a python package, that will be executed each time a repository
+        was successfully downloaded.
+        """
+        # Get module infos from module in 'package_path'.
+        # For that, we need to split the path into its package and the module.
+        # Example: example/dir/module.py
+        # -> Name: module
+        # -> [Path: example/dir]
+        plugin_name = package_path[package_path.rfind("/")+1:-3]
+        plugin_dir  = package_path[:package_path.rfind("/")]
+        
+        info = imp.find_module(plugin_name, [plugin_dir])
+
+        self.plugins[package_path] = imp.load_module(plugin_name, *info)
+        
+    def runSuccessHandler(self, dir_path):
+        """
+        Execute each specified success handler.
+        """
+        _files = os.listdir(dir_path)
+        if self.plugins:
+            for key in self.plugins:
+                self.plugins[key].run(_files)
 
 class RepositoryExistsException(BaseException):
     pass
