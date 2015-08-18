@@ -369,10 +369,8 @@ class ModeArgsParser(object):
         for mode in self.combinations_helper:
             counter = 0
             arg = "\t" + mode + "\t\t"
-            print "MODE", mode
             for key in self.combinations_helper[mode][self.KEY_ARGS_NECESSARY_WVAL]:
                 
-                print "TEST", key
                 arg += "-" + str(key[0])
                 if key[1]:
                     arg += "/--" + str(key[1]) 
