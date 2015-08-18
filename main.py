@@ -7,10 +7,12 @@ Created on Jul 4, 2015
 from crawler import Crawler
 import sys
 from args_parser import ModeArgsParser
+from github.git_downloader import GitDownloader, OutOfScopeException
 
 ARGS_HELP = "help"
 ARGS_RATELIMIT   = "ratelimit"
 ARGS_CRAWL_REPOS = "crawl"
+ARGS_CLONE_REPOS = "clone"
 ARGS_EXTRACT_KEYDATA = "extract"
 ARGS_EXTRACTREPOS_FILTERED = "filter"
 
@@ -27,6 +29,14 @@ def main(argv):
     
     flow    = None
     crawler = None
+    
+    
+#     abc = GitDownloader()
+#     abc.cloneRepoLink("https://github.com/trey/yark.git")
+#     with open('abc', 'r') as fh:
+#         abc.goToLine(fh, 1)
+        
+#     sys.exit()
 
     try:
         flow = parser.parseArgs(argv[1], argv[2:])
@@ -79,6 +89,26 @@ def main(argv):
             _filter = flow["filter"]
         finally:
             crawler.extractReposFiltered(flow["in"], flow["out"], _filter)
+            
+    # cloning repos
+    elif flow[parser.KEY_MODE] == ARGS_CLONE_REPOS:
+        downloader = GitDownloader(flow["out"])
+        try:
+            _line = flow["l"]
+        except:
+            try:
+                _line = flow["_line"]
+            except:
+                _line = 0
+        
+        try:
+            downloader.cloneAllFromFile(flow["in"], _line)
+            
+        except OutOfScopeException as err:
+            print (
+                "The specified line number '%s' in parameter '-l/--line' is "
+                "out of scope for file '%s'." % (_line, flow["in"])
+                )
 
 def setupArgs(parser):
     """
@@ -132,6 +162,31 @@ def setupArgs(parser):
                                 ["in=", None], 
                                 ["out=", None], 
                                 ["f=", "filter"]
+                                ],
+                                   explanation=explanation)
+    
+    explanation = (
+                "Clone repositories from the links specified in file '-in' "
+                "to directory '-out'. Use optional parameter -l/--line to "
+                " specify the line number from which to start in file '-in'. "
+                "-p/--plugin can be specified to "
+                "execute a python package for each repository, right after one "
+                "was downloaded. -d/--delete can then additionally be used, to "
+                "also delete the repository after having examined it using "
+                "-p/--plugin."
+                )
+    # Clone repositories: clone -in file -out dir 
+    #                                    -p/--plugin python_package_path
+    #                                    -l/--line   line_number
+    parser.addArgumentsCombination(ARGS_CLONE_REPOS,
+                                   [
+                                ["in=", None], 
+                                ["out=", None], 
+                                ],
+                                   [
+                                ["p=", "plugin"], 
+                                ["d", "delete"], 
+                                ["l=", "line"]
                                 ],
                                    explanation=explanation)
 
