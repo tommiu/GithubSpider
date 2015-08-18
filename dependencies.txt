@@ -1,1 +1,3 @@
 requests
+
+for  the git cloning feature, git has to be installed and accessible in $PATH.
