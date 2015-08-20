@@ -133,7 +133,9 @@ def setupArgs(parser):
     """
     # Ratelimit: ratelimit
     explanation = "Check your ratelimit."
-    parser.addArgumentsCombination(ARGS_RATELIMIT, explanation=explanation)
+    parser.addArgumentsCombination(ARGS_RATELIMIT, 
+                                   optional_args=[["a=", "auth"]],
+                                   explanation=explanation)
     
     # Help: help
     explanation = "Print this help."
