@@ -89,7 +89,16 @@ class GitDownloader(object):
             
     def cloneRepoLink(self, link):
         msg     = "Cloning repository: %s..." % link
-        out_dir = self.OUT_DIR + link[link.rfind("/") + 1 : -4]
+        
+        last_slash_index  = link.rfind("/")
+        second_last_index = link.rfind("/", 0, last_slash_index)
+        
+        repo_name   = link[last_slash_index + 1 : -4]
+        author_name = link[second_last_index + 1 : last_slash_index]
+        
+        # reponame_authorname-format enables us to clone repositories of
+        # the same name, but of different authors.
+        out_dir = self.OUT_DIR + author_name + "_" + repo_name
 
         print "%s" % msg,
         sys.stdout.flush()
