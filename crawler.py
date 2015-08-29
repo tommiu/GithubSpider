@@ -44,12 +44,6 @@ class Crawler(object):
     
     FILTERKEY_STARS = "stars"
     
-
-    
-    REPO_KEY_LANGUAGE = "language"
-    
-    DEFAULT_REPO_FILTER = {REPO_KEY_LANGUAGE: "PHP"}
-    
     # GitHub Session object
     s = None
     
@@ -110,7 +104,7 @@ class Crawler(object):
     def crawlReposWUpdate(self, data_filename):
         self.crawlRepos(data_filename, skip=False)
     
-    def crawlRepos(self, file_links, skip=True):
+    def crawlRepos(self, file_links, skip=True, _filter=None):
         current_ratelimit = self.getRateLimit()["core"]["remaining"]
         if current_ratelimit == 0:
             self.endExecution()
@@ -208,7 +202,8 @@ class Crawler(object):
                             try:
                                 # Update data, by requesting Github API.
                                 self.nextBackupCrawl(fw, repos, 
-                                                     copy_only=copy_only)
+                                                     copy_only=copy_only,
+                                                     _filter=_filter)
                                 
                             except RatelimitExceededException:
                                     # No ratelimit remaining, continue
@@ -250,13 +245,13 @@ class Crawler(object):
             if not url:
                 # We do not have a URL to start form yet.
                 # Start crawling from the beginning.
-                repos = self.nextCrawl(fw)
+                repos = self.nextCrawl(fw, _filter=_filter)
                 url   = repos.getNextURL()
 
             # Parse until ratelimit is reached.
             while url:
                 # Crawl next page
-                repos = self.nextCrawl(fw, url=url)
+                repos = self.nextCrawl(fw, url=url, _filter=_filter)
                 url   = repos.getNextURL()
     
             fw.close()
@@ -264,7 +259,8 @@ class Crawler(object):
         except RatelimitExceededException:
             self.endExecution()
 
-    def nextBackupCrawl(self, fh, repository_list, copy_only=False):
+    def nextBackupCrawl(self, fh, repository_list, 
+                        copy_only=False, _filter=None):
         """
         Get up-to-date data for already crawled repositories.
         If 'copy_only' is specified, we only copy old data from
@@ -282,14 +278,15 @@ class Crawler(object):
             if result:
                 print "Found update!"
         
-        # Filter results
-        repository_list.filter(self.s, self.DEFAULT_REPO_FILTER)
+        if _filter:
+            # Filter results
+            repository_list.filter(self.s, self.DEFAULT_REPO_FILTER)
         
         self.datamanager.writeRepositoryList(fh, repository_list)
         
         return result
 
-    def nextCrawl(self, fh, url=None):
+    def nextCrawl(self, fh, url=None, _filter=None):
         """
         Crawl repositories from GitHub.
         'url' is used to specify the next parse-URL.
@@ -304,8 +301,10 @@ class Crawler(object):
             print _format % "From beginning."
             result = self.s.getRepos()
 
-        # Filter results
-        result.filter(self.s, self.DEFAULT_REPO_FILTER)
+
+        if _filter:
+            # Filter results
+            result.filter(self.s, _filter)
 
         # Write new results from Github.
         self.datamanager.writeRepositoryList(fh, result)

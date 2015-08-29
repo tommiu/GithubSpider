@@ -36,7 +36,6 @@ class RepositoryList(object):
             # Query repo and check filter.
             try:
                 full_repo = session.getRepo(repo.getURL())
-                
                 if full_repo.filter(_filter):
                     filtered_repos.append(full_repo)
                     

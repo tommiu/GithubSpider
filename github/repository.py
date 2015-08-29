@@ -35,12 +35,14 @@ class Repository(object):
         """
         for key in _filter:
             if key in self._dict:
-                if self._dict[key] != _filter[key]:
-                    return False
+                    if (
+                    str(self._dict[key]).lower() != str(_filter[key]).lower()
+                    ):
+                        return False
             
             else:
                 return False
-            
+        
         return True
     
     def __str__(self):

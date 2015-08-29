@@ -8,6 +8,7 @@ from crawler import Crawler
 import sys
 from args_parser import ModeArgsParser
 from github.git_downloader import GitDownloader, OutOfScopeException
+import json
 
 ARGS_HELP = "help"
 ARGS_RATELIMIT   = "ratelimit"
@@ -15,6 +16,29 @@ ARGS_CRAWL_REPOS = "crawl"
 ARGS_CLONE_REPOS = "clone"
 ARGS_EXTRACT_KEYDATA = "extract"
 ARGS_EXTRACTREPOS_FILTERED = "filter"
+
+REPO_KEY_LANGUAGE   = "language"
+DEFAULT_REPO_FILTER = {REPO_KEY_LANGUAGE: "PHP"}
+
+REPO_ALLOWED_KEYS = [
+                'issues_url', 'stargazers_count', 'forks_url', 'mirror_url', 
+                'subscription_url', 'notifications_url', 'collaborators_url',
+                'updated_at', 'private', 'pulls_url', 'issue_comment_url', 
+                'labels_url', 'has_wiki', 'full_name', 'owner', 'statuses_url', 
+                'id', 'keys_url', 'description', 'subscribers_count', 
+                'tags_url', 'network_count', 'downloads_url', 'assignees_url', 
+                'contents_url', 'has_pages', 'git_refs_url', 
+                'open_issues_count', 'clone_url', 'watchers_count', 
+                'git_tags_url', 'milestones_url', 'languages_url', 'size', 
+                'homepage', 'fork', 'commits_url', 'releases_url', 
+                'issue_events_url', 'archive_url', 'comments_url', 
+                'events_url', 'contributors_url', 'html_url', 'forks', 
+                'compare_url', 'open_issues', 'git_url', 'svn_url', 
+                'merges_url', 'has_issues', 'ssh_url', 'blobs_url', 
+                'git_commits_url', 'hooks_url', 'has_downloads', 'watchers', 
+                'name', 'language', 'url', 'created_at', 'pushed_at', 
+                'forks_count', 'default_branch', 'teams_url', 'trees_url', 
+                'branches_url', 'subscribers_url', 'stargazers_url']
 
 def main(argv):
     """
@@ -30,14 +54,6 @@ def main(argv):
     flow    = None
     crawler = None
     
-    
-#     abc = GitDownloader()
-#     abc.cloneRepoLink("https://github.com/trey/yark.git")
-#     with open('abc', 'r') as fh:
-#         abc.goToLine(fh, 1)
-        
-#     sys.exit()
-
     try:
         flow = parser.parseArgs(argv[1], argv[2:])
         
@@ -46,7 +62,6 @@ def main(argv):
             auth_file = flow["a"]
         elif "auth" in flow:
             auth_file = flow["auth"]
-            
         
     except:
         parser.printHelp(argv[0])
@@ -69,9 +84,25 @@ def main(argv):
                 skip = False
             else:
                 skip = True
+            
+            try:
+                if "f" in flow:
+                    _filter = flow["f"]
+                    _filter = convertIntoDict(_filter)
                 
-            crawler.crawlRepos(flow["in"], skip)
+                elif "filter" in flow:
+                    _filter = flow["filter"]
+                    _filter = convertIntoDict(_filter)
+                    
+                else:
+                    _filter = DEFAULT_REPO_FILTER
+                    
+            except Exception as err:
+                print err
                 
+            finally:
+                crawler.crawlRepos(flow["in"], skip, _filter=_filter)
+            
     elif flow[parser.KEY_MODE] == ARGS_EXTRACT_KEYDATA:
         crawler = Crawler(auth_file)
         
@@ -127,6 +158,31 @@ def main(argv):
                 "out of scope for file '%s'." % (_line, flow["in"])
                 )
 
+def convertIntoDict(_str):
+    try:
+        _dict = json.loads(_str)
+        
+    except:
+        _dict = None
+    
+    if isinstance(_dict, dict):
+        valid = True
+        for key in _dict:
+            if key not in REPO_ALLOWED_KEYS:
+                valid = False
+                invalid_key = key
+                break
+            
+        if valid:
+            return _dict
+        
+        else: 
+            raise ValueError("Dictionary key '%s' is not a valid "
+                             "key of a repository" % invalid_key)
+    
+    raise ValueError("Filter should be specified as a "
+                     "JSON-decoded python dictionary.")
+
 def setupArgs(parser):
     """
     Setup command line arguments combinations.
@@ -141,7 +197,7 @@ def setupArgs(parser):
     explanation = "Print this help."
     parser.addArgumentsCombination(ARGS_HELP, explanation=explanation)
     
-    # Crawl repos: crawl -in file -out file (-s/--skip)
+    # Crawl repos: crawl -in file -out file (-s/--skip, -a/--auth, -f/--filter)
     explanation = (
                 "Crawl repositories from Github.com "
                 "to file specified with \"-in\". "
@@ -152,7 +208,11 @@ def setupArgs(parser):
     parser.addArgumentsCombination(
                                 ARGS_CRAWL_REPOS,
                                 [["in=", None]],
-                                [["ds", "dontskip"], ["a=", "auth"]],
+                                [
+                            ["ds", "dontskip"], 
+                            ["a=", "auth"], 
+                            ["f=", "filter"]
+                            ],
                                 explanation=explanation
                                 )
     
