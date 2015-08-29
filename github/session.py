@@ -135,7 +135,7 @@ class Session(object):
                 raise UnavailableRepoException()
             
         return response
-    
+
     def addOAuth(self, url):
         """
         Add the OAuth get-parameter to the specified 'url'.
