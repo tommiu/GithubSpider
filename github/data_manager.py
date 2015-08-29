@@ -112,7 +112,7 @@ class DataManager(object):
     
                     # We just went forwards, so go back again.
                     fh.seek(-stepsize, os.SEEK_CUR)
-                    print "stepped back once"
+
                 except IOError as e:
                     if e.errno == errno.EINVAL:
                         # Attempted to seek past the start while stepping back.
