@@ -15,6 +15,7 @@ from github.exceptions import RatelimitExceededException
 import signal
 from github.oauthManager import *
 import errno
+from github.data_manager import DataManager
 
 class Crawler(object):
     '''
@@ -33,12 +34,9 @@ class Crawler(object):
     HEADER_XRATELIMIT_REMAINING = "X-RateLimit-Remaining"
     
     KEY_NEXT  = "next"
-    KEY_ETAG  = "ETag"
     KEY_SINCE = "since"
     KEY_COUNT = "count"
     KEY_START = "start"
-    KEY_THIS_URL  = "url"
-    KEY_NEXT_URL  = "next_url"
     KEY_RL_REMAIN = "X-RateLimit-Remaining"
     KEY_CLONE_URL = "clone_url"
     KEY_STATUS_CODE   = "status_code"
@@ -46,7 +44,7 @@ class Crawler(object):
     
     FILTERKEY_STARS = "stars"
     
-    COMMENT_CHAR = "#"
+
     
     REPO_KEY_LANGUAGE = "language"
     
@@ -59,6 +57,9 @@ class Crawler(object):
         '''
         Constructor
         '''
+        # DataManager handles file reading/writing.
+        self.datamanager  = DataManager()
+        
         # Get OAuth from file 'authentication'.
         auth_file    = file_path
         auth_manager = OAuthManager(filename=auth_file)
@@ -123,6 +124,7 @@ class Crawler(object):
         fw = None
         f_links = None
         
+        
         TEXT_PROCESSING = "Processing contents of file: "
         # If a links file already exists from earlier crawls, then parse it.
         if os.path.isfile(file_links):
@@ -159,7 +161,8 @@ class Crawler(object):
 
             os.rename(file_links, file_links_backup)
             
-            f_links = open(file_links_backup, 'r')
+            f_links     = open(file_links_backup, 'r')
+            
             if skip:
                 # We do not want to recrawl old data, so
                 # just copy-paste it.
@@ -170,19 +173,15 @@ class Crawler(object):
             
             print TEXT_PROCESSING + str(file_links) + "..."
             sys.stdout.flush()
-            
-            # 'counter' determines the correct sequence/file-format of
-            # the given links-file.
-            counter = 0
 
             if skip:
                 # We do not want to recrawl old data.
                 # Therefore, get the last next-link from the old data,
                 # so that we can continue crawling from there.
-#                 old_data  = f_links.readlines()[-4:]
-#                 f_links.close()
-                old_data = self.getDataLikeTail(file_links, 4)
+                data = self.datamanager.getDataLikeTail(file_links, 
+                                                            1, stepsize=65)
 
+                url = self.datamanager.extractNextURL(data)
             else:
                 old_data = f_links
  
@@ -190,42 +189,21 @@ class Crawler(object):
             repos = None
             next_url = None
             
-            # Parse old data.
-            for l in old_data:
-                counter += 1
-                
-                # Does the line start with '#', indicating a comment?
-                if self.isComment(l):
-                    if self.isURL(l) and counter == 1:
-                        url = self.getVal(l, sep=' ', index=2)
+            file_pos = None
+            # Parse old data if skip was not specified.
+            while 1 and not skip:
+                try:
+                    file_pos    = old_data.tell()
+                    parsed_data = self.datamanager.parseNextBlock(old_data)
 
-                    elif self.isNext(l) and counter == 2:
-                        next_url = self.getVal(l, sep=' ', index=2)
+                    if parsed_data:
+                        _repos, url, etag, next_url = parsed_data
                         
-                    elif self.isEtag(l) and counter == 3:
-                        etag = self.getVal(l)
-                    
-                    else:
-                        print l
-                        print "Encountered an error with file '%s'." % (
-                                                                file_links
-                                                                )
-                        sys.exit()
-                        
-                else:
-                    if l != "" and counter == 4:
-                        # We are done with parsing a single block of data,
-                        # use this information to crawl data and see,
-                        # if GitHub answers with new or old data.
-                        # -> The link file can get huge and this way, we 
-                        # do not spam the memory with large lists of data.
-                        counter = 0
-
                         repos = RepositoryList(
-                                    url, etag, repos=l.strip(),
+                                    url, etag, repos=_repos,
                                     next_url=next_url
                                     )
-
+        
                         if not skip:
                             try:
                                 # Update data, by requesting Github API.
@@ -236,7 +214,19 @@ class Crawler(object):
                                     # No ratelimit remaining, continue
                                     # to only copy the old data and finish.
                                     copy_only = True
-            
+
+                    # We finished parsing the old data.                    
+                    else:
+                        break
+                    
+                # Encountered malformatted block, probably because
+                # the original data file was cut/edited.
+                # Rewind the file position and skip one line.
+                except IOError as err:
+                    old_data.seek(file_pos, os.SEEK_SET)
+                    old_data.readline()
+                    print err, " Skipping this line!"
+
             if repos:
                 url = repos.getNextURL()
                 
@@ -274,58 +264,6 @@ class Crawler(object):
         except RatelimitExceededException:
             self.endExecution()
 
-    def getDataLikeTail(self, filename, count):
-        """
-        Efficient way to read the last lines of a huge file.
-        """
-        sep = "\n"
-        stepsize = 2048
-        
-        with open(filename, 'rb') as fh:
-            # Go to end of file.
-            pos = 0
-            linecount = 0
-            fh.seek(0, os.SEEK_END)
-            
-            while linecount <= count + 1:
-                try:
-                    # Go backwards in file.
-                    fh.seek(-stepsize, os.SEEK_CUR)
-                    
-                    # Count found newlines.
-                    linecount += fh.read(stepsize).count(sep)
-    
-                    # We just went forwards, so go back again.
-                    fh.seek(-stepsize, os.SEEK_CUR)
-
-                except IOError as e:
-                    if e.errno == errno.EINVAL:
-                        # Attempted to seek past the start while stepping back.
-                        stepsize = fh.tell()
-                        fh.seek(0, os.SEEK_SET)
-                        
-                        # Read from beginning.
-                        linecount += fh.read(stepsize).count(sep)
-                        
-                        pos = 0
-                        break
-
-                pos = fh.tell()
-                
-        # Now read data.
-        with open(filename, 'r') as fh:
-            fh.seek(pos, os.SEEK_SET)
-            
-            for line in fh:
-                # We found n (or even more) lines, 
-                # so we could need to skip some lines.
-                if linecount > count:
-                    linecount -= 1
-                    continue
-                
-                # Otherwise return data.
-                yield line
-
     def nextBackupCrawl(self, fh, repository_list, copy_only=False):
         """
         Get up-to-date data for already crawled repositories.
@@ -347,7 +285,7 @@ class Crawler(object):
         # Filter results
         repository_list.filter(self.s, self.DEFAULT_REPO_FILTER)
         
-        self.writeRepositoryList(fh, repository_list)
+        self.datamanager.writeRepositoryList(fh, repository_list)
         
         return result
 
@@ -370,23 +308,9 @@ class Crawler(object):
         result.filter(self.s, self.DEFAULT_REPO_FILTER)
 
         # Write new results from Github.
-        self.writeRepositoryList(fh, result)
+        self.datamanager.writeRepositoryList(fh, result)
 
         return result
-
-    def writeRepositoryList(self, fh, repository_list):
-        """
-        Write crawled repository_list to filehandler 'fh'.
-        """
-        fh.write("# " + self.KEY_THIS_URL  + ": %s\n" % 
-                repository_list.getURL())
-        fh.write("# " + self.KEY_NEXT_URL  + ": %s\n" % 
-                 repository_list.getNextURL())
-        fh.write("# " + self.KEY_ETAG      + ": %s\n" % 
-                 repository_list.getEtag())
-
-        fh.write(str(repository_list) + "\n")
-        fh.flush()
         
     def getKeyFromCrawlData(self, input_file, output_file,
                                   key=KEY_CLONE_URL):
@@ -502,7 +426,7 @@ class Crawler(object):
                         
                             # Break and ignore rest.
                             break
-                        
+
                         # Check for ">int"
                         index = _val.find(">")
                         if index != -1:
@@ -556,56 +480,7 @@ class Crawler(object):
                 return next_link
             else:
                 return ""
-    
-    def isComment(self, _str):
-        return _str.startswith(self.COMMENT_CHAR)
-    
-    def isEtag(self, _str):
-        try:
-            key, _ = _str.split(":")
-            if key[2:] == self.KEY_ETAG:
-                return True
-            
-        except ValueError:
-            pass
         
-        return False
-    
-    def isURL(self, _str):
-        try:
-            _, key, _ = _str.split(" ")
-            if key.startswith(self.KEY_THIS_URL):
-                return True
-            
-        except ValueError:
-            pass
-        
-        return False
-    
-    def isNext(self, _str):
-        try:
-            _, key, _ = _str.split(" ")
-            if key.startswith(self.KEY_NEXT_URL):
-                return True
-            
-        except ValueError:
-            pass
-        
-        return False
-    
-    def getVal(self, _str, sep=':', index=1):
-        """
-        Return the val if _str includes one.
-        Otherwise return False.
-        """
-        # "# " + self.KEY_SINCE + ": %d\n" % result[self.KEY_SINCE])
-        # "# " + self.KEY_ETAG  + ": %s\n" % result[self.KEY_ETAG])
-        try:
-            _arr = _str.split(sep)
-            return _arr[index].strip()
-        except ValueError:
-            return False
-    
     def search(self, q="language:PHP", sort=None, order=None):
         """
         Search GitHub for 'q'.
