@@ -6,6 +6,7 @@ Created on Aug 29, 2015
 import os
 import errno
 import sys
+from github.repository_list import RepositoryList
 
 class DataManager(object):
     '''
@@ -154,6 +155,25 @@ class DataManager(object):
                  repository_list.getNextURL())
 
         fh.flush()
+        
+    def getKeyFromCrawlData(self, input_file, output_file, key):
+        """
+        Extract the value for 'key' from every crawled repository in file
+        'input_file'.
+        Output is redirected into 'output_file'.
+        """
+        with open(input_file, 'r') as fr:
+            with open(output_file, 'w') as fw:
+                for l in fr:
+                    if not self.isComment(l):
+                        if l != "":
+                            repos = RepositoryList(repos=l)
+                            
+                            if not repos.isEmpty():
+                                # Found a list of repo dictionaries.
+                                # Read it and get its value for 'key'.
+                                for repo in repos:
+                                    fw.write(str(repo[key]).strip() + "\n")
     
     def isComment(self, _str):
         return _str.startswith(self.COMMENT_CHAR)

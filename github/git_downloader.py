@@ -12,6 +12,7 @@ import signal
 import imp
 
 import pdb
+import shutil
 
 class GitDownloader(object):
     """
@@ -25,13 +26,20 @@ class GitDownloader(object):
             
         self.plugins = {} 
                 
-    def cloneAllFromFile(self, filename, linenumber=0):
+    def cloneAllFromFile(self, filename, linenumber=0, delete=False):
         """
         Clone repositories from links, that are read from 'filename', starting
         at linenumber 'linenumber'.
         """
         linenumber = int(linenumber)
         self.interrupt = False
+        
+        if delete:
+            print (
+                "Cloning was called with 'delete' specified. After cloning "
+                "and processing a repository, it will be deleted again to " 
+                "free space."
+                )
         
         def catchInterrupt(signum, frame):
             """
@@ -62,22 +70,42 @@ class GitDownloader(object):
             signal.signal(signal.SIGINT,  catchInterrupt)
 
             l = fh.readline()
+            
             while l and not self.interrupt:
+                out_dir = None
                 try:
                     print "Trying link on line %d in file '%s'" % (linenumber, 
                                                                    filename)
-                    self.cloneRepoLink(l.strip())
+                    out_dir = self.cloneRepoLink(l.strip())
+                    
+                    # If any success handler was specified by the user,
+                    # execute it using the path of the 
+                    # downloaded repository as an argument.
+                    try:
+                        if not self.interrupt:
+                            # If a plugin was specified to process
+                            # the repository, it will be run.
+                            self.runSuccessHandler(out_dir)
+            
+                    except OSError as err:
+                        print err
                 
                 except (
                     RepositoryExistsException, 
                     RepositoryDoesNotExistException
                     ) as err:
-                        print str(err).strip()
+                        print err.message
                         print "Skipping..."
+                        out_dir = err.out_dir
                     
                 finally:
                     linenumber += 1
                     l = fh.readline()
+                    
+                    if delete and out_dir:
+                        # Delete repository.
+                        print "Deleting directory '%s'." % out_dir
+                        shutil.rmtree(out_dir)
             
             # Remove backup signal handlers.
             # SIG_DFL is the standard signal handle for any signal.
@@ -100,7 +128,7 @@ class GitDownloader(object):
         # the same name, but of different authors.
         out_dir = self.OUT_DIR + author_name + "_" + repo_name
 
-        print "%s" % msg,
+        print "%s" % msg
         sys.stdout.flush()
         
         # Start cloning the repository from 'link' simply using 'git' from
@@ -112,25 +140,15 @@ class GitDownloader(object):
         
         if stderr != "" and stderr != "\n" :
             if "already exists and is not an empty directory." in stderr:
-                raise RepositoryExistsException(str(stderr))
+                raise RepositoryExistsException(str(stderr), out_dir)
             
             elif "does not exist" in stderr:
-                raise RepositoryDoesNotExistException(str(stderr))
-        
-        if not self.interrupt:
-            print "%s Done." % msg
+                raise RepositoryDoesNotExistException(str(stderr), out_dir)
         
         if stdout:
             print stdout
-        
-        # If any success handler was specified by the user,
-        # execute it using the path of the downloaded repository as an argument.
-        try:
-            if not self.interrupt:
-                self.runSuccessHandler(out_dir)
-    
-        except OSError as err:
-            print err
+            
+        return out_dir
         
     def goToLine(self, fh, linenumber):
         """
@@ -182,10 +200,30 @@ class GitDownloader(object):
                 self.plugins[key].run(_files)
 
 class RepositoryExistsException(BaseException):
-    pass
+    def __init__(self, msg=None, out_dir=None):
+        if msg:
+            self.message = msg
+            
+        else:
+            self.message = (
+                    "Repository does exist already."
+                    )
+            
+        if out_dir:
+            self.out_dir = out_dir
 
 class RepositoryDoesNotExistException(BaseException):
-    pass
+    def __init__(self, msg=None, out_dir=None):
+        if msg:
+            self.message = msg
+            
+        else:
+            self.message = (
+                    "Repository is not accessible on GitHub.com."
+                    )
+            
+        if out_dir:
+            self.out_dir = out_dir
 
 class OutOfScopeException(BaseException):
     def __init__(self, msg=None, line=None):

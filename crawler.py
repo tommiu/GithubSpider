@@ -37,8 +37,8 @@ class Crawler(object):
     KEY_SINCE = "since"
     KEY_COUNT = "count"
     KEY_START = "start"
-    KEY_RL_REMAIN = "X-RateLimit-Remaining"
     KEY_CLONE_URL = "clone_url"
+    KEY_RL_REMAIN = "X-RateLimit-Remaining"
     KEY_STATUS_CODE   = "status_code"
     KEY_CRAWLED_LINKS = "crawled_links"
     
@@ -310,7 +310,7 @@ class Crawler(object):
         self.datamanager.writeRepositoryList(fh, result)
 
         return result
-        
+
     def getKeyFromCrawlData(self, input_file, output_file,
                                   key=KEY_CLONE_URL):
         """
@@ -318,18 +318,7 @@ class Crawler(object):
         'input_file'.
         Output is redirected into 'output_file'.
         """
-        with open(input_file, 'r') as fr:
-            with open(output_file, 'w') as fw:
-                for l in fr.readlines():
-                    if not self.isComment(l):
-                        if l != "":
-                            repos = RepositoryList(repos=l)
-                            
-                            if not repos.isEmpty():
-                                # Found a list of repo dictionaries.
-                                # Read it and get its value for 'key'.
-                                for repo in repos:
-                                    fw.write(str(repo[key]).strip() + "\n")
+        self.datamanager.getKeyFromCrawlData(input_file, output_file, key)
 
     def extractReposFiltered(self, input_file, output_file,
                              _filter=None):

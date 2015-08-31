@@ -66,7 +66,7 @@ def main(argv):
     except:
         parser.printHelp(argv[0])
         sys.exit()
-        
+
     if flow[parser.KEY_MODE] == ARGS_HELP:
         parser.printHelp(argv[0])
     
@@ -102,7 +102,7 @@ def main(argv):
                 
             finally:
                 crawler.crawlRepos(flow["in"], skip, _filter=_filter)
-            
+
     elif flow[parser.KEY_MODE] == ARGS_EXTRACT_KEYDATA:
         crawler = Crawler(auth_file)
         
@@ -139,18 +139,35 @@ def main(argv):
             except:
                 _line = 0
         
+        delete = False
+        if "d" in flow or "delete" in flow:
+            delete = True
+
+        plugin = False
         try:
             downloader.setSuccessHandler(flow["p"])
-            
+            plugin = True
+
         except Exception as err:
-            print err
             try:
                 downloader.setSuccessHandler(flow["plugin"])
+                plugin = True
             except:
                 pass
-            
+        
+        if delete and not plugin:
+            print (
+                "A combination of -d/--delete without -p/--plugin is "
+                "not allowed."
+                )
+            sys.exit()
+        
         try:
-            downloader.cloneAllFromFile(flow["in"], _line)
+            downloader.cloneAllFromFile(
+                                    flow["in"], 
+                                    linenumber=_line, 
+                                    delete=delete
+                                    )
             
         except OutOfScopeException as err:
             print (
@@ -203,7 +220,12 @@ def setupArgs(parser):
                 "to file specified with \"-in\". "
                 "-ds/--dontskip can be used to first check for updates "
                 "for already crawled repositories in file. "
-                "The input file will be renamed to input_file_backup."
+                "The input file will be renamed to input_file_backup. "
+                "Use -f/--filter followed by a python dictionary to "
+                "specify a filter to only save information of repositories "
+                "which apply to that filter. "
+                "The default filter is {\"language\": \"PHP\"}, but any "
+                "python dictionary is allowed."
                 )
     parser.addArgumentsCombination(
                                 ARGS_CRAWL_REPOS,
