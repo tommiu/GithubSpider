@@ -67,6 +67,7 @@ def main(argv):
         parser.printHelp(argv[0])
         sys.exit()
 
+    # Evaluate program arguments and start program.
     if flow[parser.KEY_MODE] == ARGS_HELP:
         parser.printHelp(argv[0])
     
@@ -241,8 +242,8 @@ def setupArgs(parser):
     explanation = (
                 "Extract the value associated with '-k/--key' from "
                 "crawled repositories in '-in' and write it to '-out'."
-                "Default for 'k/--key' is 'stargazers_count', which "
-                "states how often a repository got stared."
+                "Default for 'k/--key' is 'clone_url', which "
+                "specifies the URL for cloning a repository."
                 )
     # Extract key data: extract -in file -out file (-k/--key)
     parser.addArgumentsCombination(ARGS_EXTRACT_KEYDATA,
