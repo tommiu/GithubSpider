@@ -97,7 +97,7 @@ class GitDownloader(object):
                         print err.message
                         print "Skipping..."
                         out_dir = err.out_dir
-                    
+
                 finally:
                     linenumber += 1
                     l = fh.readline()
@@ -114,7 +114,7 @@ class GitDownloader(object):
             
             if not self.interrupt:
                 print "End of file reached, my work is done!"
-            
+
     def cloneRepoLink(self, link):
         msg     = "Cloning repository: %s..." % link
         
