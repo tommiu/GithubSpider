@@ -255,8 +255,8 @@ def setupArgs(parser):
     explanation = (
                 "Filter the repositories from file '-in' and write "
                 "filtered repositories to '-out'. '-f/--filter' specifies "
-                "the filter criterion. Currently supported: stars==5, stars=>2 "
-                "stars=<5, stars=>2 <10 etc."   
+                "the filter criterion. Currently supported: stars:=x, stars:>x "
+                "stars:<x, stars:>x <y. size:>x, size:<y, size:>x <y."   
                 )
     # Filter repositories: filter -in file -out file -f/--filter filter_arg
     parser.addArgumentsCombination(ARGS_EXTRACTREPOS_FILTERED,

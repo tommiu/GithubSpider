@@ -17,7 +17,10 @@ class DataManager(object):
     KEY_ETAG  = "ETag"
     KEY_THIS_URL  = "url"
     KEY_NEXT_URL  = "next_url"
-
+    
+    FILTERKEY_SIZE  = "size"
+    FILTERKEY_STARS = "stars"
+    
     def __init__(self):
         '''
         Constructor
@@ -174,6 +177,190 @@ class DataManager(object):
                                 # Read it and get its value for 'key'.
                                 for repo in repos:
                                     fw.write(str(repo[key]).strip() + "\n")
+                                    
+    def extractReposFiltered(self, input_file, output_file,
+                             _filter=None):
+        """
+        Extract any repository from 'input_file' that matches 'filter',
+        into 'output_file'.
+        """
+        flow = []
+        if _filter:
+            flow = self.parseFilter(_filter)
+        else:
+            print "No filter specified. Quitting..."
+            sys.exit()
+        
+        if flow[0] == -1:
+            print "Could not parse filter correctly. Quitting..."
+            sys.exit()
+            
+        fr = open(input_file, 'r')
+        fw = open(output_file, 'w') 
+        
+        filtered_repos = RepositoryList()
+        for l in fr.readlines():
+            if not self.isComment(l):
+                if l != "" and l != "[]\n":
+                    # Found a list of repo dictionaries. Read it.
+                    repos = RepositoryList(repos=l)
+                    
+                    for repo in repos:
+                        is_suitable = True
+                        
+                        # Apply filter and append 
+                        # suitable repos to the result.
+                        if flow[0] == self.FILTERKEY_STARS:
+                            # Extract stars value
+                            stars = repo.getStars()
+                            
+                            if flow[1] != -1:
+                                if stars != flow[1]:
+                                    is_suitable = False
+                            else:
+                                if flow[2] != -1:
+                                    # specified filter: stars > flow[2]
+                                    if stars <= flow[2]:
+                                        is_suitable = False
+                                if flow[3] != -1:
+                                    # specified filter: stars < flow[3]
+                                    if stars >= flow[3]:
+                                        is_suitable = False
+                                
+                        elif flow[0] == self.FILTERKEY_SIZE:
+                            # Extract size value
+                            size = repo.getSize()
+                            
+                            if flow[1] != -1:
+                                # specified filter: size > flow[1]
+                                if size <= flow[1]:
+                                    is_suitable = False
+                            else:
+                                if flow[2] != -1:
+                                    # specified filter: size > flow[2]
+                                    if size >= flow[2]:
+                                        is_suitable = False
+                                        
+                        if is_suitable:
+                            filtered_repos += repo
+                                
+        fw.write(str(filtered_repos))
+                                
+        fr.close()
+        fw.close()
+        
+    def parseFilter(self, _filter):
+        """
+        Parse a given filter and extract interesting values.
+        """
+        flow = [-1, -1, -1, -1]
+        
+        if _filter:
+            # Expecting filter of type 'keyword="values"'. A value can be
+            # "=5", so do not just .split("=").
+            index = _filter.find(":")
+
+            if index > 0:
+                key   = _filter[0:index].strip()
+                val   = _filter[index+1:].strip()
+            else:
+                raise ValueError("Filter format is wrong. You gave: %s."
+                                 "However, expected is '%s'!" % (
+                                                    _filter, "key:\"values\""
+                                                    ))
+            
+            if key == self.FILTERKEY_STARS and val:
+                flow[0] = key
+                
+                # Expecting "=int", ">int", "<int", ">int <int",
+                # "<int >int" or "" 
+                for _val in val.split(" "):
+                    # Ignore empty values
+                    if _val:
+                        # Check for "=int"
+                        index = _val.find("=")
+                        if index != -1:
+                            # Found "="
+
+                            # Ignore values found earlier.
+                            flow[1] = int(_val[index+1:].strip())
+                        
+                            # Break and ignore rest.
+                            break
+
+                        # Check for ">int"
+                        index = _val.find(">")
+                        if index != -1:
+                            # Found ">"
+                            
+                            flow[2] = int(_val[index+1:].strip())
+                            
+                            continue
+                        
+                        # Check for "<int"
+                        index = _val.find("<")
+                        if index != -1:
+                            # Found "<"
+                            
+                            flow[3] = int(_val[index+1:].strip())
+                
+                if (
+                flow[1] == -1 and flow[2] != -1 and flow[3] != -1 and 
+                flow[2] + 1 >= flow[3]
+                ):
+                    raise ValueError("Filter will not yield "
+                                     "any results: >%d <%d." % (
+                                                        flow[2], flow[3]
+                                                        ))
+                elif (
+                flow[1] == -1 and flow[2] == -1 and flow[3] == -1      
+                ):
+                    raise ValueError(
+                            "Filter could not be parsed. \nExample filters: "
+                            "stars:\"=2\", stars:\">2 <5\", stars:\"<10\""
+                            )
+                    
+            elif key == self.FILTERKEY_SIZE and val:
+                flow[0] = key
+                
+                # Expecting ">int", "<int", ">int <int",
+                # "<int >int" or "" 
+                for _val in val.split(" "):
+                    # Ignore empty values
+                    if _val:
+                        # Check for ">int"
+                        index = _val.find(">")
+                        if index != -1:
+                            # Found ">"
+                            
+                            flow[1] = int(_val[index+1:].strip())
+                            
+                            continue
+                        
+                        # Check for "<int"
+                        index = _val.find("<")
+                        if index != -1:
+                            # Found "<"
+                            
+                            flow[2] = int(_val[index+1:].strip())
+
+                if flow[1] >= flow[2] - 1:
+                    raise ValueError(
+                            "Filter will not yield any results: >%d <%d." % (
+                                                                flow[1], flow[2]
+                                                                )
+                            )
+                
+                elif flow[1] == -1 and flow[2] == -1:
+                    raise ValueError(
+                            "Filter could not be parsed. \nExample filters: "
+                            "size:\">50 <1000\", size=\"<500\", size:\">1000\""
+                            )
+                    
+            else:
+                raise ValueError("Filter not known: %s" % (key))
+
+        return flow
     
     def isComment(self, _str):
         return _str.startswith(self.COMMENT_CHAR)

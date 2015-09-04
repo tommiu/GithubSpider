@@ -67,6 +67,13 @@ class Repository(object):
         except KeyNotFoundException:
             raise DidNotCrawlRepoDetailsException(KEY)
     
+    def getSize(self):
+        try:
+            KEY = "size"
+            return self.getValue(KEY)
+        except KeyNotFoundException:
+            raise DidNotCrawlRepoDetailsException(KEY)
+    
     def getURL(self):
         KEY = "url"
         return self.getValue(KEY)
