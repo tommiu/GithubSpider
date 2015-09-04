@@ -1,3 +1,6 @@
-requests
+installed custom python modules: requests, pexpect
+pip install requests
+pip install pexpect
+(equivalent: easy_install)
 
 for  the git cloning feature, git has to be installed and accessible in $PATH.
