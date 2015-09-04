@@ -11,8 +11,9 @@ import sys
 import signal
 import imp
 
-import pdb
 import shutil
+
+import pexpect
 
 class GitDownloader(object):
     """
@@ -31,7 +32,8 @@ class GitDownloader(object):
         Clone repositories from links, that are read from 'filename', starting
         at linenumber 'linenumber'.
         """
-        linenumber = int(linenumber)
+        clone_count    = 0
+        linenumber     = int(linenumber)
         self.interrupt = False
         
         if delete:
@@ -46,16 +48,19 @@ class GitDownloader(object):
             Catch CTRL-C/D and exit in a safe manner.
             """
             file_path = self.OUT_DIR + "cloning_interrupted"
-            print (
-                "Stopped at line '%d'. Also wrote the linenumber to "
-                "file '%s'."
-                ) % (linenumber, file_path)
             
             # Write linenumber to file, so that the user can continue there
             # next time.
             with open(file_path, 'w') as fh:
+                fh.write(str(filename) + "\n")
                 fh.write(str(linenumber) + "\n")
-            
+                
+            print (
+                "Stopped at line '%d'. Cloned %d repositories.\n" 
+                "Also wrote path of the link file "
+                " and the linenumber to file '%s'."
+                ) % (linenumber, clone_count, file_path)
+
             self.interrupt = True
             
         with open(filename, 'r') as fh:
@@ -76,8 +81,8 @@ class GitDownloader(object):
                 try:
                     print "Trying link on line %d in file '%s'" % (linenumber, 
                                                                    filename)
-                    out_dir = self.cloneRepoLink(l.strip())
-                    
+                    out_dir = self.cloneRepoLink(l.strip(), linenumber)
+                    clone_count += 1
                     # If any success handler was specified by the user,
                     # execute it using the path of the 
                     # downloaded repository as an argument.
@@ -90,13 +95,29 @@ class GitDownloader(object):
                     except OSError as err:
                         print err
                 
+                except pexpect.TIMEOUT:
+                    print "Timed out."
+                    print "Skipping..."
+
+                # EOF = process finished in unhandled way.
+                except pexpect.EOF:
+                    clone_count += 1
+                
                 except (
                     RepositoryExistsException, 
-                    RepositoryDoesNotExistException
+                    RepositoryDoesNotExistException,
+                    CredentialsExpectedException
                     ) as err:
                         print err.message
                         print "Skipping..."
-                        out_dir = err.out_dir
+                        
+                        try:
+                            out_dir = err.out_dir
+                        
+                        # CredentialsExpectedException does not
+                        # have a 'out_dir' variable.
+                        except:
+                            pass
 
                 finally:
                     linenumber += 1
@@ -114,42 +135,49 @@ class GitDownloader(object):
             
             if not self.interrupt:
                 print "End of file reached, my work is done!"
-
-    def cloneRepoLink(self, link):
-        msg     = "Cloning repository: %s..." % link
         
+    def cloneRepoLink(self, link, int_test):
+        msg     = "Cloning repository: %s..." % link
+         
         last_slash_index  = link.rfind("/")
         second_last_index = link.rfind("/", 0, last_slash_index)
-        
+         
         repo_name   = link[last_slash_index + 1 : -4]
         author_name = link[second_last_index + 1 : last_slash_index]
-        
+         
         # reponame_authorname-format enables us to clone repositories of
         # the same name, but of different authors.
         out_dir = self.OUT_DIR + author_name + "_" + repo_name
-
+ 
         print "%s" % msg
         sys.stdout.flush()
-        
+         
         # Start cloning the repository from 'link' simply using 'git' from
         # the user's system PATH variable.
-        process = subprocess.Popen(["git", "clone", link, out_dir], 
-                                   stdout=subprocess.PIPE, 
-                                   stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate()
+        process = pexpect.spawn("git", ["clone", link, out_dir])
+        expectation = process.expect([
+                            'Username',
+                            'already exists and is not an empty directory',
+                            'does not exist'
+                            ])
         
-        if stderr != "" and stderr != "\n" :
-            if "already exists and is not an empty directory." in stderr:
-                raise RepositoryExistsException(str(stderr), out_dir)
-            
-            elif "does not exist" in stderr:
-                raise RepositoryDoesNotExistException(str(stderr), out_dir)
+        if expectation == 0:
+            raise CredentialsExpectedException()
         
-        if stdout:
-            print stdout
-            
-        return out_dir
+        elif expectation == 1:
+            raise RepositoryExistsException(
+                                        process.before + process.after, 
+                                        out_dir
+                                        )
         
+        elif expectation == 2:
+            raise RepositoryDoesNotExistException(
+                                        process.before + process.after, 
+                                        out_dir
+                                        )
+        
+        return out_dir        
+
     def goToLine(self, fh, linenumber):
         """
         Go to 'linenumber' of a huge text file in an (memory-)efficient way.
@@ -194,10 +222,21 @@ class GitDownloader(object):
         """
         Execute each specified success handler.
         """
-        _files = os.listdir(dir_path)
         if self.plugins:
+            _files = os.listdir(dir_path)
             for key in self.plugins:
                 self.plugins[key].run(_files)
+
+
+class CredentialsExpectedException(BaseException):
+    def __init__(self, msg=None):
+        if msg:
+            self.message = msg
+            
+        else:
+            self.message = (
+                    "Login credentials were requested."
+                    )
 
 class RepositoryExistsException(BaseException):
     def __init__(self, msg=None, out_dir=None):
@@ -224,6 +263,8 @@ class RepositoryDoesNotExistException(BaseException):
             
         if out_dir:
             self.out_dir = out_dir
+            
+
 
 class OutOfScopeException(BaseException):
     def __init__(self, msg=None, line=None):
