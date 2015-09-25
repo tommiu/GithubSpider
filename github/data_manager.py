@@ -20,6 +20,7 @@ class DataManager(object):
     
     FILTERKEY_SIZE  = "size"
     FILTERKEY_STARS = "stars"
+    FILTERKEY_EMPTY = "nofilter"
     
     def __init__(self):
         '''
@@ -185,15 +186,19 @@ class DataManager(object):
         into 'output_file'.
         """
         flow = []
-        if _filter:
+        try:
             flow = self.parseFilter(_filter)
-        else:
-            print "No filter specified. Quitting..."
+            
+        except Exception as err:
+            print err
             sys.exit()
         
         if flow[0] == -1:
             print "Could not parse filter correctly. Quitting..."
             sys.exit()
+        
+        elif flow[0] == self.FILTERKEY_EMPTY:
+            print "Empty filter specified, copying all repositories."
             
         fr = open(input_file, 'r')
         fw = open(output_file, 'w') 
@@ -241,6 +246,9 @@ class DataManager(object):
                                     if size >= flow[2]:
                                         is_suitable = False
                                         
+                        elif flow[0] == self.FILTERKEY_EMPTY:
+                            pass
+                                        
                         if is_suitable:
                             filtered_repos += repo
                                 
@@ -254,7 +262,7 @@ class DataManager(object):
         Parse a given filter and extract interesting values.
         """
         flow = [-1, -1, -1, -1]
-        
+
         if _filter:
             # Expecting filter of type 'keyword="values"'. A value can be
             # "=5", so do not just .split("=").
@@ -264,13 +272,13 @@ class DataManager(object):
                 key   = _filter[0:index].strip()
                 val   = _filter[index+1:].strip()
             else:
-                raise ValueError("Filter format is wrong. You gave: %s."
+                raise ValueError("Filter format is wrong. You gave: %s. "
                                  "However, expected is '%s'!" % (
                                                     _filter, "key:\"values\""
                                                     ))
             
             if key == self.FILTERKEY_STARS and val:
-                flow[0] = key
+                flow[0]
                 
                 # Expecting "=int", ">int", "<int", ">int <int",
                 # "<int >int" or "" 
@@ -356,7 +364,10 @@ class DataManager(object):
                             "Filter could not be parsed. \nExample filters: "
                             "size:\">50 <1000\", size=\"<500\", size:\">1000\""
                             )
-                    
+            
+            elif key == self.FILTERKEY_EMPTY:
+                flow[0] = key
+                
             else:
                 raise ValueError("Filter not known: %s" % (key))
 
