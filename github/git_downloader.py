@@ -153,8 +153,9 @@ class GitDownloader(object):
         sys.stdout.flush()
          
         # Start cloning the repository from 'link' simply using 'git' from
-        # the user's system PATH variable.
-        process = pexpect.spawn("git", ["clone", link, out_dir])
+        # the user's system PATH variable. 
+        # 5 minutes max. per repository until timeout
+        process = pexpect.spawn("git", ["clone", link, out_dir], 300)
         expectation = process.expect([
                             'Username',
                             'already exists and is not an empty directory',
