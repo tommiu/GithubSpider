@@ -10,12 +10,15 @@ import json
 from exceptions import *
 from github.repository_list import RepositoryList
 from github.repository import Repository
+from time import sleep
 
 class Session(object):
     """
     This class saves the user's authorization infos and is able to do requests
     to the Github API on behalf of the authorized user.
     """
+
+    SLEEP = 0.5
 
     URL_API   = "https://api.github.com"
     URL_REPOS      = URL_API + "/repositories"
@@ -117,22 +120,29 @@ class Session(object):
         """
         Send a get-request with all session-headers.
         """
-        if headers:
-            header = self.HEADERS.copy()
-            header.update(headers)
-
-            response = requests.get(url, headers=header)
-        else:
-            response = requests.get(url, headers=self.HEADERS)
-        
-        if response.status_code == self.STATUS_UNAVAILABLE:
-            if response.headers[self.KEY_RL_REMAIN] == 0:
-                # Ratelimit 0 reached.
-                raise RatelimitExceededException()
-            
+        try:
+            if headers:
+                header = self.HEADERS.copy()
+                header.update(headers)
+    
+                response = requests.get(url, headers=header)
             else:
-                # Unavailable resource
-                raise UnavailableRepoException()
+                response = requests.get(url, headers=self.HEADERS)
+            
+            if response.status_code == self.STATUS_UNAVAILABLE:
+                if response.headers[self.KEY_RL_REMAIN] == 0:
+                    # Ratelimit 0 reached.
+                    raise RatelimitExceededException()
+                
+                else:
+                    # Unavailable resource
+                    raise UnavailableRepoException()
+        
+        except requests.exceptions.ConnectionError as err:
+            print err
+            print "Sleeping %d seconds and retrying with same URL." % self.SLEEP
+            sleep(0.5)
+            response = self.sessionRequestGet(url, headers)
             
         return response
 
