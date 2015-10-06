@@ -16,6 +16,8 @@ import signal
 from github.oauthManager import *
 import errno
 from github.data_manager import DataManager
+from time import sleep
+from threading import Thread
 
 class Crawler(object):
     '''
@@ -292,13 +294,27 @@ class Crawler(object):
         result = None
 
         _format = "Crawling: %s"
+        
+        # Setup visual feedback thread.
+        visual_feedback = visualCrawlingFeedback()
+        
         if url:
-            print _format % url
+            _format = _format % url
+            sys.stdout.write(_format + "\r")
+            sys.stdout.flush()
+            
+            visual_feedback.setMsg(_format)
+            visual_feedback.start()
             result = self.s.getRepos(url=url)
+            
         else:
-            print _format % "From beginning."
+            _format = _format % "From beginning."
+            sys.stdout.write(_format + "\r")
+            sys.stdout.flush()
+            
+            visual_feedback.setMsg(_format)
+            visual_feedback.start()
             result = self.s.getRepos()
-
 
         if _filter:
             # Filter results
@@ -306,6 +322,10 @@ class Crawler(object):
 
         # Write new results from Github.
         self.datamanager.writeRepositoryList(fh, result)
+
+        visual_feedback.stopFeedback()
+        
+        print visual_feedback.getMsg() + "Saved to file."
 
         return result
 
@@ -419,3 +439,40 @@ class Crawler(object):
             # the load on the GitHub API servers.
             if not resp["items"]:
                 break
+            
+class visualCrawlingFeedback(Thread):
+    def __init__(self):
+        super(visualCrawlingFeedback, self).__init__()
+        self.done = False
+    
+    def run(self):
+        counter    = 0
+        self.msg  += "."
+        sys.stdout.write(self.msg + "\r")
+        sys.stdout.flush()
+        sleep(1)
+        
+        while not self.done:
+            if counter < 3:
+                self.msg += "."
+                counter  += 1
+            else:
+                self.msg = self.msg[:-3] + "   "
+                counter  = 0
+                
+            sys.stdout.write(self.msg + "\r")
+            sys.stdout.flush()
+            
+            if counter == 0:
+                self.msg = self.msg[:-3]
+            
+            sleep(1)
+    
+    def setMsg(self, msg):
+        self.msg = msg
+        
+    def stopFeedback(self):
+        self.done = True
+        
+    def getMsg(self):
+        return self.msg
