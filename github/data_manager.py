@@ -173,11 +173,18 @@ class DataManager(object):
         """
         # Parse "keys". Can be a single key or 
         # multiple keys seperated by commas.
-        if "," in keys:
-            print "yolo" 
-            sys.exit()
+        filter_keys = []
         
-        header = ""
+        if "," in keys:
+            filter_keys = keys.split(",")
+            filter_keys = [key.strip() for key in filter_keys]
+        else:
+            filter_keys.append(keys)
+        
+        header  = "# "
+        header += " ".join(filter_keys)
+        header += "\n"
+        header += "#-----------------------------"
         
         # Extract values
         with open(input_file, 'r') as fr:
@@ -194,7 +201,10 @@ class DataManager(object):
                                 # Found a list of repo dictionaries.
                                 # Read it and get its value for 'key'.
                                 for repo in repos:
-                                    fw.write(str(repo[keys]).strip() + "\n")
+                                    _output = ""
+                                    for key in filter_keys:
+                                        _output += str(repo[key]) + " "
+                                    fw.write(_output.strip() + "\n")
         
     @staticmethod                            
     def extractReposFiltered(input_file, output_file,

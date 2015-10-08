@@ -239,7 +239,9 @@ def setupArgs(parser):
                 "Extract the value associated with '-k/--key' from "
                 "crawled repositories in '-in' and write it to '-out'."
                 "Default for 'k/--key' is 'clone_url', which "
-                "specifies the URL for cloning a repository."
+                "specifies the URL for cloning a repository. "
+                "However, '-k/--key' can take a list of keys to extract, "
+                "separated by commas. Example: -k \"id, clone_url\""
                 )
     # Extract key data: extract -in file -out file (-k/--key)
     parser.addArgumentsCombination(ARGS_EXTRACT_KEYDATA,
@@ -255,6 +257,7 @@ def setupArgs(parser):
                 "stars:<x, stars:>x <y. size:>x, size:<y, size:>x <y, "
                 "nofilter:."
                 )
+    
     # Filter repositories: filter -in file -out file -f/--filter filter_arg
     parser.addArgumentsCombination(ARGS_EXTRACTREPOS_FILTERED,
                                    [

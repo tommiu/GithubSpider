@@ -331,13 +331,13 @@ class Crawler(object):
 
     @staticmethod
     def getKeyFromCrawlData(input_file, output_file,
-                                  key=KEY_CLONE_URL):
+                                  keys=KEY_CLONE_URL):
         """
         Extract the value for 'key' from every crawled repository in file
         'input_file'.
         Output is redirected into 'output_file'.
         """
-        DataManager.getKeyFromCrawlData(input_file, output_file, key)
+        DataManager.getKeysFromCrawlData(input_file, output_file, keys)
 
     @staticmethod
     def extractReposFiltered(input_file, output_file,
