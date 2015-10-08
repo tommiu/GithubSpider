@@ -445,7 +445,11 @@ class Crawler(object):
 class visualCrawlingFeedback(Thread):
     def __init__(self):
         super(visualCrawlingFeedback, self).__init__()
-        self.done = False
+        self.done   = False
+        
+        # Set every new thread to a 'daemon'-thread, so that it is killed
+        # upon exiting parent, i.e. in case of CTRL-C.
+        self.daemon = True
     
     def run(self):
         counter    = 0
