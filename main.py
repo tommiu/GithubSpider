@@ -105,28 +105,24 @@ def main(argv):
                 crawler.crawlRepos(flow["in"], skip, _filter=_filter)
 
     elif flow[parser.KEY_MODE] == ARGS_EXTRACT_KEYDATA:
-        crawler = Crawler(auth_file)
-        
         if "k" in flow or "key" in flow:
             try:
                 key = flow["k"]
             except:
                 key = flow["key"]
             finally:
-                crawler.getKeyFromCrawlData(flow["in"], flow["out"], key)
+                Crawler.getKeyFromCrawlData(flow["in"], flow["out"], key)
             
         else:
-            crawler.getKeyFromCrawlData(flow["in"], flow["out"])
+            Crawler.getKeyFromCrawlData(flow["in"], flow["out"])
     
     elif flow[parser.KEY_MODE] == ARGS_EXTRACTREPOS_FILTERED:
-        crawler = Crawler(auth_file)
-        
         try:
             _filter = flow["f"]
         except:
             _filter = flow["filter"]
         finally:
-            crawler.extractReposFiltered(flow["in"], flow["out"], _filter)
+            Crawler.extractReposFiltered(flow["in"], flow["out"], _filter)
             
     # cloning repos
     elif flow[parser.KEY_MODE] == ARGS_CLONE_REPOS:

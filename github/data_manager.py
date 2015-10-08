@@ -159,8 +159,13 @@ class DataManager(object):
                  repository_list.getNextURL())
 
         fh.flush()
-        
-    def getKeyFromCrawlData(self, input_file, output_file, key):
+    
+    @staticmethod
+    def isComment(_str):
+        return _str.startswith(DataManager.COMMENT_CHAR)    
+
+    @staticmethod
+    def getKeyFromCrawlData(input_file, output_file, key):
         """
         Extract the value for 'key' from every crawled repository in file
         'input_file'.
@@ -169,7 +174,7 @@ class DataManager(object):
         with open(input_file, 'r') as fr:
             with open(output_file, 'w') as fw:
                 for l in fr:
-                    if not self.isComment(l):
+                    if not DataManager.isComment(l):
                         if l != "":
                             repos = RepositoryList(repos=l)
                             
@@ -178,8 +183,9 @@ class DataManager(object):
                                 # Read it and get its value for 'key'.
                                 for repo in repos:
                                     fw.write(str(repo[key]).strip() + "\n")
-                                    
-    def extractReposFiltered(self, input_file, output_file,
+        
+    @staticmethod                            
+    def extractReposFiltered(input_file, output_file,
                              _filter=None):
         """
         Extract any repository from 'input_file' that matches 'filter',
@@ -187,7 +193,7 @@ class DataManager(object):
         """
         flow = []
         try:
-            flow = self.parseFilter(_filter)
+            flow = DataManager.parseFilter(_filter)
             
         except Exception as err:
             print err
@@ -197,7 +203,7 @@ class DataManager(object):
             print "Could not parse filter correctly. Quitting..."
             sys.exit()
         
-        elif flow[0] == self.FILTERKEY_EMPTY:
+        elif flow[0] == DataManager.FILTERKEY_EMPTY:
             print "Empty filter specified, copying all repositories."
             
         fr = open(input_file, 'r')
@@ -205,7 +211,7 @@ class DataManager(object):
         
         filtered_repos = RepositoryList()
         for l in fr.readlines():
-            if not self.isComment(l):
+            if not DataManager.isComment(l):
                 if l != "" and l != "[]\n":
                     # Found a list of repo dictionaries. Read it.
                     repos = RepositoryList(repos=l)
@@ -215,7 +221,7 @@ class DataManager(object):
                         
                         # Apply filter and append 
                         # suitable repos to the result.
-                        if flow[0] == self.FILTERKEY_STARS:
+                        if flow[0] == DataManager.FILTERKEY_STARS:
                             # Extract stars value
                             stars = repo.getStars()
                             
@@ -232,7 +238,7 @@ class DataManager(object):
                                     if stars >= flow[3]:
                                         is_suitable = False
                                 
-                        elif flow[0] == self.FILTERKEY_SIZE:
+                        elif flow[0] == DataManager.FILTERKEY_SIZE:
                             # Extract size value
                             size = repo.getSize()
                             
@@ -246,7 +252,7 @@ class DataManager(object):
                                     if size >= flow[2]:
                                         is_suitable = False
                                         
-                        elif flow[0] == self.FILTERKEY_EMPTY:
+                        elif flow[0] == DataManager.FILTERKEY_EMPTY:
                             pass
                                         
                         if is_suitable:
@@ -256,8 +262,9 @@ class DataManager(object):
                                 
         fr.close()
         fw.close()
-        
-    def parseFilter(self, _filter):
+    
+    @staticmethod
+    def parseFilter(_filter):
         """
         Parse a given filter and extract interesting values.
         """
@@ -277,7 +284,7 @@ class DataManager(object):
                                                     _filter, "key:\"values\""
                                                     ))
             
-            if key == self.FILTERKEY_STARS and val:
+            if key == DataManager.FILTERKEY_STARS and val:
                 flow[0]
                 
                 # Expecting "=int", ">int", "<int", ">int <int",
@@ -328,7 +335,7 @@ class DataManager(object):
                             "stars:\"=2\", stars:\">2 <5\", stars:\"<10\""
                             )
                     
-            elif key == self.FILTERKEY_SIZE and val:
+            elif key == DataManager.FILTERKEY_SIZE and val:
                 flow[0] = key
                 
                 # Expecting ">int", "<int", ">int <int",
@@ -365,16 +372,13 @@ class DataManager(object):
                             "size:\">50 <1000\", size=\"<500\", size:\">1000\""
                             )
             
-            elif key == self.FILTERKEY_EMPTY:
+            elif key == DataManager.FILTERKEY_EMPTY:
                 flow[0] = key
                 
             else:
                 raise ValueError("Filter not known: %s" % (key))
 
         return flow
-    
-    def isComment(self, _str):
-        return _str.startswith(self.COMMENT_CHAR)
     
     def isEtag(self, _str):
         try:

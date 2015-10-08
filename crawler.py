@@ -329,22 +329,24 @@ class Crawler(object):
 
         return result
 
-    def getKeyFromCrawlData(self, input_file, output_file,
+    @staticmethod
+    def getKeyFromCrawlData(input_file, output_file,
                                   key=KEY_CLONE_URL):
         """
         Extract the value for 'key' from every crawled repository in file
         'input_file'.
         Output is redirected into 'output_file'.
         """
-        self.datamanager.getKeyFromCrawlData(input_file, output_file, key)
+        DataManager.getKeyFromCrawlData(input_file, output_file, key)
 
-    def extractReposFiltered(self, input_file, output_file,
+    @staticmethod
+    def extractReposFiltered(input_file, output_file,
                              _filter=None):
         """
         Extract any repository from 'input_file' that matches 'filter',
         into 'output_file'.
         """
-        self.datamanager.extractReposFiltered(input_file, output_file, _filter)
+        DataManager.extractReposFiltered(input_file, output_file, _filter)
     
     def endExecution(self):
         print "Ratelimit reached. Quitting..."
