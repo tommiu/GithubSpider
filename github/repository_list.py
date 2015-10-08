@@ -68,6 +68,9 @@ class RepositoryList(object):
         while ctr < len(self.repos):
             yield self.repos[ctr]
             ctr += 1
+            
+    def __len__(self):
+        return len(self.repos)
     
     def isEmpty(self):
         return True if not self.repos else False

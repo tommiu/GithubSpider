@@ -165,14 +165,26 @@ class DataManager(object):
         return _str.startswith(DataManager.COMMENT_CHAR)    
 
     @staticmethod
-    def getKeyFromCrawlData(input_file, output_file, key):
+    def getKeysFromCrawlData(input_file, output_file, keys):
         """
         Extract the value for 'key' from every crawled repository in file
         'input_file'.
         Output is redirected into 'output_file'.
         """
+        # Parse "keys". Can be a single key or 
+        # multiple keys seperated by commas.
+        if "," in keys:
+            print "yolo" 
+            sys.exit()
+        
+        header = ""
+        
+        # Extract values
         with open(input_file, 'r') as fr:
             with open(output_file, 'w') as fw:
+                # Write "header" line first.
+                fw.write(header + "\n")
+                
                 for l in fr:
                     if not DataManager.isComment(l):
                         if l != "":
@@ -182,7 +194,7 @@ class DataManager(object):
                                 # Found a list of repo dictionaries.
                                 # Read it and get its value for 'key'.
                                 for repo in repos:
-                                    fw.write(str(repo[key]).strip() + "\n")
+                                    fw.write(str(repo[keys]).strip() + "\n")
         
     @staticmethod                            
     def extractReposFiltered(input_file, output_file,
@@ -257,7 +269,11 @@ class DataManager(object):
                                         
                         if is_suitable:
                             filtered_repos += repo
-                                
+        
+        # Print out the number of matched repositories.
+        _len = len(filtered_repos)
+        _str = "repository" if _len == 1 else "repositories"
+        print "%d %s matched and written to file." % (_len, _str)
         fw.write(str(filtered_repos))
                                 
         fr.close()
