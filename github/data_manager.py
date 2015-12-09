@@ -311,7 +311,7 @@ class DataManager(object):
                                                     ))
             
             if key == DataManager.FILTERKEY_STARS and val:
-                flow[0]
+                flow[0] = key
                 
                 # Expecting "=int", ">int", "<int", ">int <int",
                 # "<int >int" or "" 
